@@ -2,6 +2,10 @@
 
 A powerful, privacy-focused tool for transcribing audio and video files locally using OpenAI's Whisper model. No data is sent to external servers - everything runs on your machine.
 
+**Author:** Brad Stoner (bmstoner@cisco.com)  
+**Created for:** Splunk and Cisco  
+**Version:** 1.0.1
+
 ---
 
 ## 📖 Quick Navigation

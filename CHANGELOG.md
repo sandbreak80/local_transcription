@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2024-11-10
+
+### Changed
+- Added author attribution (Brad Stoner, bmstoner@cisco.com)
+- Added organization information (Created for Splunk and Cisco)
+- Updated documentation with version and author information at top of README
+- Enhanced HOW_TO_USE_THE_ZIP.md with production testing section prominently displayed
+- Updated VERSION_INFO.txt with complete author and organization details
+
+### Documentation
+- Added version, author, and organization info to README.md header
+- Enhanced HOW_TO_USE_THE_ZIP.md with prominent testing validation section
+- Updated all version references from 1.0.0 to 1.0.1
+
 ## [1.0.0] - 2024-11-10
 
 ### Added - Docker Release 🐳
