@@ -66,7 +66,7 @@
 Your repository is clean and ready. When you run:
 
 ```bash
-cd /Users/bmstoner/code_projects/local-transcription
+cd local-transcription
 git init
 git add .
 git commit -m "Initial commit - Local Transcription Tool v1.0.0"
@@ -91,7 +91,7 @@ git push -u origin main
 
 ### Option 2: ZIP for Sharing
 ```bash
-cd /Users/bmstoner/code_projects
+cd ..
 zip -r local-transcription.zip local-transcription \
     -x "*/venv/*" "*/__pycache__/*" "*.pyc"
 ```

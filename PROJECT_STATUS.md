@@ -182,7 +182,7 @@ Total Essential Files: 23
 
 ### Option 1: GitHub Repository (Recommended)
 ```bash
-cd /Users/bmstoner/code_projects/local-transcription
+cd local-transcription
 git init
 git add .
 git commit -m "Initial commit - Docker-based transcription tool v1.0.0"
@@ -192,6 +192,12 @@ git push -u origin main
 ```
 
 ### Option 2: ZIP Distribution
+```bash
+cd ..
+zip -r local-transcription.zip local-transcription \
+    -x "*/venv/*" "*/__pycache__/*" "*.pyc"
+```
+
 The repository is ready to be zipped and shared:
 - All documentation included
 - Scripts are executable
