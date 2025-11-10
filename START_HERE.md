@@ -22,12 +22,18 @@ You already have it! You're reading this file.
 **Mac/Linux:**
 ```bash
 ./transcribe.sh /path/to/your/video.mp4
+# Or with better quality:
+./transcribe.sh /path/to/your/video.mp4 --model base
 ```
 
 **Windows:**
 ```cmd
 transcribe.bat C:\path\to\your\video.mp4
+REM Or with better quality:
+transcribe.bat C:\path\to\your\video.mp4 --model base
 ```
+
+**Tested with:** 52-minute video, ~10 min processing (base model)
 
 **First time?** The script builds everything automatically (~5 min). After that, it's instant!
 

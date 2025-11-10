@@ -37,6 +37,13 @@
 - [x] Scripts executable
 - [x] All features working
 
+**Test command used:**
+```bash
+./transcribe.sh "/path/to/your/video.mp4" --model base
+# Successfully transcribed 52-minute video
+# Output: video_transcription.txt + video_transcription.json
+```
+
 ---
 
 ## 📊 What Git Will See
