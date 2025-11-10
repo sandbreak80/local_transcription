@@ -50,6 +50,12 @@
 - ✅ Cross-platform scripts created
 - ✅ Documentation links verified
 
+**Test command:**
+```bash
+./transcribe.sh "/path/to/video.mp4" --model base
+# Result: 52-min video transcribed in ~10 min
+```
+
 ---
 
 ## 📊 Project Statistics
