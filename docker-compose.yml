@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  transcribe:
+    build: .
+    image: local-transcription
+    container_name: transcription-service
+    volumes:
+      # Mount your media directory here
+      - ./media:/media
+    command: --help
+    # Uncomment below to specify a specific video file
+    # command: /media/your-video.mp4 --model base
+
+# Usage Examples:
+# 
+# 1. Build the image:
+#    docker-compose build
+#
+# 2. Show help:
+#    docker-compose run --rm transcribe --help
+#
+# 3. Transcribe a file (place your video in ./media folder):
+#    docker-compose run --rm transcribe /media/video.mp4
+#
+# 4. Transcribe with options:
+#    docker-compose run --rm transcribe /media/video.mp4 --model large --animated-quotes
+#
+# 5. Use custom volume mount:
+#    docker-compose run --rm -v /path/to/your/videos:/media transcribe /media/video.mp4
+

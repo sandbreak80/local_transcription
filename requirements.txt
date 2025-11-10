@@ -1,0 +1,10 @@
+openai-whisper
+torch
+torchaudio
+ffmpeg-python
+click
+tqdm
+librosa
+numpy
+scipy
+scikit-learn
