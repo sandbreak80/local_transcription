@@ -54,15 +54,18 @@ if errorlevel 1 (
 echo 🌐 Starting web server on http://localhost:%PORT%
 echo.
 echo 📋 Instructions:
-echo   1. Open your browser to http://localhost:%PORT%
-echo   2. Upload your audio/video files
-echo   3. Select options and start transcription
-echo   4. Download results when complete
+echo   • Browser will open automatically in 3 seconds...
+echo   • Upload your audio/video files
+echo   • Select options and start transcription
+echo   • Download results when complete
 echo.
 echo ⏹️  To stop: Press Ctrl+C
 echo.
 echo ==========================================
 echo.
+
+REM Open browser after a short delay (in background)
+start "" cmd /c "timeout /t 3 /nobreak >nul 2>&1 && echo 🌐 Opening browser... && start http://localhost:%PORT%"
 
 REM Run the container with web interface
 docker run -it --rm ^

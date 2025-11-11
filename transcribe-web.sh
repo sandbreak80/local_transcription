@@ -50,15 +50,37 @@ fi
 echo "🌐 Starting web server on http://localhost:$PORT"
 echo ""
 echo "📋 Instructions:"
-echo "  1. Open your browser to http://localhost:$PORT"
-echo "  2. Upload your audio/video files"
-echo "  3. Select options and start transcription"
-echo "  4. Download results when complete"
+echo "  • Browser will open automatically in 3 seconds..."
+echo "  • Upload your audio/video files"
+echo "  • Select options and start transcription"
+echo "  • Download results when complete"
 echo ""
 echo "⏹️  To stop: Press Ctrl+C"
 echo ""
 echo "=========================================="
 echo ""
+
+# Function to open browser after a delay
+open_browser() {
+    sleep 3
+    echo "🌐 Opening browser..."
+    
+    # Detect OS and open browser accordingly
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        open "http://localhost:$PORT"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        if command -v xdg-open &> /dev/null; then
+            xdg-open "http://localhost:$PORT"
+        elif command -v gnome-open &> /dev/null; then
+            gnome-open "http://localhost:$PORT"
+        fi
+    fi
+}
+
+# Start browser opener in background
+open_browser &
 
 # Run the container with web interface
 docker run -it --rm \
