@@ -19,12 +19,13 @@ services:
     image: local-transcription
     container_name: transcription-web
     ports:
-      - "5000:5000"
+      - "5731:5731"
     volumes:
       - ./outputs:/tmp/transcription_outputs
     command: python /app/app.py
     environment:
       - FLASK_ENV=production
+      - FLASK_PORT=5731
 
 # Usage Examples:
 # 

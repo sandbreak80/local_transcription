@@ -281,13 +281,14 @@ def health():
     })
 
 if __name__ == '__main__':
+    port = int(os.environ.get('FLASK_PORT', 5731))
     print("=" * 70)
     print("🎙️  Local Transcription Tool - Web Interface")
     print("=" * 70)
     print(f"📂 Upload folder: {app.config['UPLOAD_FOLDER']}")
     print(f"📂 Output folder: {app.config['OUTPUT_FOLDER']}")
-    print(f"🌐 Server starting on http://0.0.0.0:5000")
+    print(f"🌐 Server starting on http://0.0.0.0:{port}")
     print("=" * 70)
     
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 

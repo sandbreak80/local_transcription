@@ -30,7 +30,7 @@ COPY static ./static
 RUN mkdir -p /media /tmp/transcription_uploads /tmp/transcription_outputs
 
 # Expose port for web interface
-EXPOSE 5000
+EXPOSE 5731
 
 # Set the entrypoint to python transcribe script
 ENTRYPOINT ["python", "/app/transcribe.py"]

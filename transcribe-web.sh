@@ -7,7 +7,7 @@
 set -e
 
 IMAGE_NAME="local-transcription-tool"
-PORT="${PORT:-5000}"
+PORT="${PORT:-5731}"
 
 echo "=========================================="
 echo "🎙️  Local Transcription Tool - Web UI"
@@ -84,7 +84,8 @@ open_browser &
 
 # Run the container with web interface
 docker run -it --rm \
-    -p "$PORT:5000" \
+    -p "$PORT:5731" \
+    -e "FLASK_PORT=5731" \
     -v "$(pwd)/outputs:/tmp/transcription_outputs" \
     "$IMAGE_NAME" \
     python3 /app/app.py

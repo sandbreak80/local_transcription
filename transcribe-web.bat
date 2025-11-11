@@ -6,7 +6,7 @@ REM Created for: Splunk and Cisco
 setlocal EnableDelayedExpansion
 
 set IMAGE_NAME=local-transcription-tool
-if "%PORT%"=="" set PORT=5000
+if "%PORT%"=="" set PORT=5731
 
 echo ==========================================
 echo 🎙️  Local Transcription Tool - Web UI
@@ -69,7 +69,8 @@ start "" cmd /c "timeout /t 3 /nobreak >nul 2>&1 && echo 🌐 Opening browser...
 
 REM Run the container with web interface
 docker run -it --rm ^
-    -p %PORT%:5000 ^
+    -p %PORT%:5731 ^
+    -e "FLASK_PORT=5731" ^
     -v "%cd%\outputs:/tmp/transcription_outputs" ^
     %IMAGE_NAME% ^
     python3 /app/app.py
