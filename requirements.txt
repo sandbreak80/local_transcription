@@ -1,6 +1,6 @@
 openai-whisper
-torch
-torchaudio
+torch>=2.0.0
+torchaudio>=2.0.0
 ffmpeg-python
 click
 tqdm
@@ -10,3 +10,8 @@ scipy
 scikit-learn
 flask
 werkzeug
+# Speaker diarization (REAL voice detection)
+pyannote.audio>=3.1.0
+pyannote.core>=5.0.0
+pyannote.database>=5.0.0
+pyannote.metrics>=3.2.0

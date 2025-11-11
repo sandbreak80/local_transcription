@@ -60,6 +60,9 @@ def process_job(job_id):
         
         cmd = ['python3', '/app/transcribe.py', input_file]
         
+        # Add output directory (CRITICAL - tells transcribe.py where to save files!)
+        cmd.extend(['--output-dir', output_dir])
+        
         # Add model parameter
         if job['model']:
             cmd.extend(['--model', job['model']])
@@ -73,35 +76,97 @@ def process_job(job_id):
             cmd.append('--animated-quotes')
         
         if job.get('two_list_quotes'):
-            cmd.append('--two-list-quotes')
+            cmd.append('--two-lists')
+        
+        # Add speaker detection options
+        if job.get('speaker_diarization'):
+            cmd.append('--speaker-diarization')
+            
+            if job.get('num_speakers'):
+                cmd.extend(['--num-speakers', str(job['num_speakers'])])
+            
+            if job.get('speaker_names'):
+                cmd.extend(['--speaker-names', job['speaker_names']])
         
         job['progress'] = 20
         job['message'] = 'Transcribing audio...'
         
         # Run transcription
-        result = subprocess.run(
-            cmd,
-            cwd=output_dir,
-            capture_output=True,
-            text=True,
-            timeout=3600  # 1 hour timeout
-        )
+        log_file = os.path.join(output_dir, f"{job['id']}_transcribe.log")
+        with open(log_file, 'w') as log:
+            log.write(f"🚀 Running command: {' '.join(cmd)}\n")
+            log.write(f"📂 Working directory: {output_dir}\n")
+            log.write(f"📂 Input file: {input_file}\n")
+            log.write(f"📂 Input file exists: {os.path.exists(input_file)}\n")
+            log.flush()
+            
+            result = subprocess.run(
+                cmd,
+                cwd=output_dir,
+                capture_output=True,
+                text=True,
+                timeout=3600  # 1 hour timeout
+            )
+            
+            log.write(f"\n✅ Command finished with returncode: {result.returncode}\n")
+            if result.stdout:
+                log.write(f"📝 STDOUT:\n{result.stdout}\n")
+            if result.stderr:
+                log.write(f"⚠️  STDERR:\n{result.stderr}\n")
         
         if result.returncode == 0:
-            # Find output files
-            base_name = Path(input_file).stem
+            # Find output files - use ORIGINAL filename, not UUID-prefixed one
+            base_name = Path(job['filename']).stem  # Use original filename from job
+            uuid_base_name = Path(input_file).stem  # UUID-prefixed name used by transcribe.py
+            original_filename = job['filename']  # Full original filename with extension
+            uuid_filename = Path(input_file).name  # UUID-prefixed filename with extension
             output_files = []
             
-            # Look for generated files
+            # Look for generated files (check both UUID-prefixed and clean names)
+            print(f"🔍 Looking for files with base_name: {base_name}")
+            print(f"🔍 UUID base_name: {uuid_base_name}")
+            print(f"📂 Output directory: {output_dir}")
+            print(f"📁 Files in output directory: {os.listdir(output_dir)}")
+            
             for ext in ['_transcription.txt', '_transcription.json', 
                        '_animated_quotes.txt', '_animated_quotes.json',
                        '_two_list_quotes.txt', '_two_list_quotes.json']:
-                output_file = os.path.join(output_dir, base_name + ext)
-                if os.path.exists(output_file):
+                
+                # Check for UUID-prefixed file first
+                actual_file = os.path.join(output_dir, uuid_base_name + ext)
+                clean_filename = base_name + ext
+                clean_path = os.path.join(output_dir, clean_filename)
+                print(f"  Checking: {actual_file} (exists: {os.path.exists(actual_file)})")
+                print(f"  Checking: {clean_path} (exists: {os.path.exists(clean_path)})")
+                
+                # Determine which file exists
+                if os.path.exists(actual_file):
+                    # UUID-prefixed file exists - clean it up
+                    with open(actual_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Replace UUID-prefixed filename with original filename in content
+                    content = content.replace(uuid_filename, original_filename)
+                    content = content.replace(uuid_base_name, base_name)
+                    
+                    # Write cleaned content to new file
+                    with open(clean_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    # Remove the old UUID-prefixed file
+                    os.remove(actual_file)
+                    
                     output_files.append({
-                        'name': os.path.basename(output_file),
-                        'path': output_file,
-                        'size': os.path.getsize(output_file)
+                        'name': clean_filename,
+                        'path': clean_path,
+                        'size': os.path.getsize(clean_path)
+                    })
+                elif os.path.exists(clean_path):
+                    # Clean file already exists - use it directly
+                    output_files.append({
+                        'name': clean_filename,
+                        'path': clean_path,
+                        'size': os.path.getsize(clean_path)
                     })
             
             job['status'] = 'completed'
@@ -162,6 +227,11 @@ def upload_files():
     animated_quotes = request.form.get('animated_quotes') == 'true'
     two_list_quotes = request.form.get('two_list_quotes') == 'true'
     
+    # Speaker detection options
+    speaker_diarization = request.form.get('speaker_diarization') == 'true'
+    num_speakers = request.form.get('num_speakers', '')
+    speaker_names = request.form.get('speaker_names', '')
+    
     uploaded_jobs = []
     
     for file in files:
@@ -185,6 +255,9 @@ def upload_files():
                 'language': language,
                 'animated_quotes': animated_quotes,
                 'two_list_quotes': two_list_quotes,
+                'speaker_diarization': speaker_diarization,
+                'num_speakers': num_speakers,
+                'speaker_names': speaker_names,
                 'status': 'queued',
                 'progress': 0,
                 'message': 'Waiting in queue...',
@@ -266,6 +339,57 @@ def download_file(job_id, filename):
             )
     
     return jsonify({'error': 'File not found'}), 404
+
+@app.route('/scan-outputs')
+def scan_outputs():
+    """Scan outputs directory for existing transcription files and create job entries"""
+    output_dir = app.config['OUTPUT_FOLDER']
+    files_found = []
+    
+    # Find all transcription files
+    for file_path in Path(output_dir).glob('*_transcription.txt'):
+        base_name = file_path.stem.replace('_transcription', '')
+        
+        # Check for corresponding JSON file
+        json_file = file_path.with_suffix('.json')
+        if not json_file.exists():
+            continue
+        
+        # Create a job entry for this completed transcription
+        job_id = str(uuid.uuid4())
+        
+        output_files = []
+        for ext in ['.txt', '.json']:
+            file = file_path.parent / f"{base_name}_transcription{ext}"
+            if file.exists():
+                output_files.append({
+                    'name': file.name,
+                    'path': str(file),
+                    'size': file.stat().st_size
+                })
+        
+        # Create job entry
+        jobs[job_id] = {
+            'id': job_id,
+            'filename': base_name + '.mp4',  # Assume mp4
+            'status': 'completed',
+            'progress': 100,
+            'message': 'Transcription completed!',
+            'model': 'base',
+            'language': 'auto',
+            'file_size_mb': 0,
+            'created_at': datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+            'completed_at': datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+            'output_files': output_files
+        }
+        
+        files_found.append(base_name)
+    
+    return jsonify({
+        'success': True,
+        'files_found': len(files_found),
+        'jobs_created': len(files_found)
+    })
 
 @app.route('/health')
 def health():

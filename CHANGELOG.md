@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2024-11-11
+
+### Added - AI Speaker Detection 🎤
+
+#### Speaker Detection Features
+- **🎤 Local Voice-Based Speaker Detection**: AI-powered speaker identification using audio feature clustering
+  - No cloud services required - 100% offline
+  - No HuggingFace account needed
+  - Uses MFCC and spectral features for voice analysis
+  - Automatic clustering of speakers by voice characteristics
+  - Fallback to librosa-based audio analysis if needed
+- **👥 Custom Speaker Names**: Automatically assign human-readable names to speakers
+  - Simple comma-separated input: `"Alice,Bob,Charlie"`
+  - Intelligent mapping to detected speakers
+  - Auto-feedback for extra/missing names
+- **🎯 Configurable Speaker Count**: Optionally specify expected number of speakers
+- **📝 Speaker Labels in Transcripts**: Each line shows who said what
+  - Format: `[timestamp] Speaker_Name: text`
+  - Works in both CLI and Web UI
+- **🌐 Web UI Integration**: Full speaker detection controls in web interface
+  - Checkbox to enable/disable
+  - Input for number of speakers
+  - Text field for custom names
+
+#### New Files
+- `local_speaker_detection.py` - Local voice-based speaker detection module
+- `SPEAKER_MODEL_SETUP.md` - Documentation for embedded speaker model
+
+#### Updated Files
+- `app.py` - Added speaker detection options to web API
+- `transcribe.py` - Integrated LocalSpeakerDetector
+- `templates/index.html` - Added speaker detection UI controls
+- `static/js/app.js` - Frontend support for speaker options
+- `requirements.txt` - Added librosa, scikit-learn, scipy for audio analysis
+- `Dockerfile` - Embedded speaker recognition model (no downloads needed)
+- `README.md` - Updated with speaker detection features
+
+### Fixed
+- **CLI Flag Mismatch**: Changed `--two-list-quotes` to `--two-lists` in web backend
+- **Speaker Name Mapping Bug**: Fixed parameter type mismatch causing crash
+- **UUID in Filenames**: Cleaned up UUID prefixes in output file content
+- **Download Links Persistence**: Added `/scan-outputs` endpoint to restore links after container restart
+- **File Display in UI**: Added dedicated file list display area
+- **Port Configuration**: Changed default port from 5000 to 5731
+
+### Changed
+- **Port Number**: Web interface now runs on port 5731 (was 5000)
+- **Speaker Detection**: Switched from `pyannote.audio` to local clustering method
+- **Embedded Model**: Speaker recognition model now embedded in Docker image (~87MB)
+
+### Technical Details
+- Audio feature extraction using MFCCs and spectral analysis
+- AgglomerativeClustering for speaker grouping
+- Cosine similarity for speaker embeddings
+- Fallback mechanism if speechbrain unavailable
+- Smart name mapping with feedback
+- Zero external dependencies for speaker detection
+
 ## [1.1.0] - 2024-11-10
 
 ### Added - Web Interface 🌐

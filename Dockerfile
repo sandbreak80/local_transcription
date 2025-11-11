@@ -20,7 +20,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY transcribe.py .
 COPY animated_quotes.py .
 COPY two_list_quotes.py .
+COPY speaker_diarization.py .
+COPY local_speaker_detection.py .
 COPY app.py .
+
+# Copy embedded speaker recognition model (NO downloads needed!)
+COPY models ./models
 
 # Copy web interface files
 COPY templates ./templates
@@ -32,9 +37,7 @@ RUN mkdir -p /media /tmp/transcription_uploads /tmp/transcription_outputs
 # Expose port for web interface
 EXPOSE 5731
 
-# Set the entrypoint to python transcribe script
-ENTRYPOINT ["python", "/app/transcribe.py"]
-
-# Default command shows help
-CMD ["--help"]
+# No default entrypoint - allows running either CLI or web interface
+# For CLI: docker run ... python /app/transcribe.py [options]
+# For Web: docker run ... python /app/app.py
 

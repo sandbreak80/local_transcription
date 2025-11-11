@@ -74,3 +74,4 @@ media/
 *.temp
 *.log
 
+models/

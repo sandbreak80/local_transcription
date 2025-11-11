@@ -1,0 +1,156 @@
+═══════════════════════════════════════════════════════════════
+               LOCAL MEDIA TRANSCRIPTION TOOL
+                       VERSION 1.2.0
+═══════════════════════════════════════════════════════════════
+
+RELEASE DATE: November 11, 2024
+AUTHOR: Brad Stoner (bmstoner@cisco.com)
+ORGANIZATION: Created for Splunk and Cisco
+
+═══════════════════════════════════════════════════════════════
+                       VERSION HISTORY
+═══════════════════════════════════════════════════════════════
+
+Version 1.2.0 - AI Speaker Detection Release (2024-11-11)
+----------------------------------------------------------
+MAJOR NEW FEATURE: Local Voice-Based Speaker Detection!
+
+🎤 Speaker Detection Features:
+- AI-powered speaker identification using audio clustering
+- 100% offline - no cloud services or accounts required
+- Custom speaker name assignment (comma-separated)
+- Configurable speaker count
+- Speaker labels in all transcripts
+- Full web UI integration
+
+🐛 Bug Fixes:
+- Fixed CLI flag mismatch (--two-list-quotes → --two-lists)
+- Fixed speaker name mapping parameter bug
+- Cleaned up UUID prefixes in file content
+- Added persistent download links after container restart
+- Fixed file display in web UI
+- Changed port from 5000 to 5731
+
+🔧 Technical Improvements:
+- Embedded speaker recognition model (~87MB) in Docker image
+- MFCC and spectral audio feature extraction
+- AgglomerativeClustering for speaker grouping
+- Intelligent fallback mechanisms
+- Smart name mapping with user feedback
+
+Version 1.1.0 - Web Interface Release (2024-11-10)
+--------------------------------------------------
+🌐 Added complete browser-based web interface:
+- Drag & drop file upload
+- Real-time progress bars
+- Visual option selection
+- Auto download of results
+- Multiple file processing queue
+- Mobile-responsive design
+
+Version 1.0.1 - Documentation Update (2024-11-10)
+-------------------------------------------------
+📄 Enhanced documentation:
+- Added author and organization information
+- Updated README with comprehensive details
+- Improved HOW_TO_USE_THE_ZIP.md
+- Added testing validation sections
+
+Version 1.0.0 - Docker Release (2024-11-10)
+-------------------------------------------
+🐳 Initial Docker release:
+- Complete containerization
+- Cross-platform wrapper scripts
+- Animated quote detection
+- Two-list quote generation
+- Multi-language support
+- Batch processing
+- 8 comprehensive documentation guides
+
+═══════════════════════════════════════════════════════════════
+                    SYSTEM REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+
+RECOMMENDED (Docker):
+- Docker Desktop 4.0+
+- 4-8GB RAM (8GB+ for large model)
+- ~3GB storage (Docker image + models)
+- macOS, Windows 10/11, or Linux
+
+ALTERNATIVE (Python):
+- Python 3.8+
+- FFmpeg
+- 4-8GB RAM
+- ~2GB storage for models
+
+═══════════════════════════════════════════════════════════════
+                      KEY FEATURES
+═══════════════════════════════════════════════════════════════
+
+✅ Privacy-First: All processing happens locally
+✅ No Cloud Required: No data sent to external servers
+✅ Multi-Format: Support for audio and video files
+✅ Multi-Language: Auto-detect or specify language
+✅ AI Speaker Detection: Identify who said what
+✅ Custom Speaker Names: Assign names automatically
+✅ Animated Quotes: Find exciting content via voice analysis
+✅ Two-List Quotes: Generate multiple quote collections
+✅ Batch Processing: Handle multiple files efficiently
+✅ Web Interface: Browser-based UI for non-technical users
+✅ Docker Support: Zero-setup deployment
+✅ Open Source: MIT License
+
+═══════════════════════════════════════════════════════════════
+                     QUICK START
+═══════════════════════════════════════════════════════════════
+
+WEB INTERFACE (Easiest):
+1. Install Docker Desktop
+2. Run: ./transcribe-web.sh (Mac/Linux) or transcribe-web.bat (Windows)
+3. Open: http://localhost:5731
+4. Drag, drop, transcribe!
+
+COMMAND LINE:
+./transcribe.sh video.mp4 --speaker-diarization --speaker-names "Alice,Bob"
+
+═══════════════════════════════════════════════════════════════
+                      DOCUMENTATION
+═══════════════════════════════════════════════════════════════
+
+START_HERE.md ................... Complete guide in one place
+QUICKSTART.md ................... 5-minute getting started
+README.md ....................... Main documentation
+DOCKER.md ....................... Docker details
+WEB_INTERFACE.md ................ Web UI guide
+USAGE_EXAMPLES.md ............... Real-world examples
+SPEAKER_MODEL_SETUP.md .......... Speaker detection setup
+CHANGELOG.md .................... Version history
+
+═══════════════════════════════════════════════════════════════
+                        SUPPORT
+═══════════════════════════════════════════════════════════════
+
+Email: bmstoner@cisco.com
+Organization: Splunk and Cisco
+Documentation: See markdown files in project root
+
+═══════════════════════════════════════════════════════════════
+                        LICENSE
+═══════════════════════════════════════════════════════════════
+
+MIT License
+Uses OpenAI Whisper (MIT License)
+
+═══════════════════════════════════════════════════════════════
+                      BUILD INFO
+═══════════════════════════════════════════════════════════════
+
+Version: 1.2.0
+Release Date: November 11, 2024
+Build Type: Production
+Docker Image: local-transcription-tool:latest
+Python Version: 3.11+
+Whisper Models: tiny, base, small, medium, large
+
+═══════════════════════════════════════════════════════════════
+

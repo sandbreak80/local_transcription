@@ -4,7 +4,7 @@ A powerful, privacy-focused tool for transcribing audio and video files locally 
 
 **Author:** Brad Stoner (bmstoner@cisco.com)  
 **Created for:** Splunk and Cisco  
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 ---
 
@@ -34,7 +34,7 @@ A powerful, privacy-focused tool for transcribing audio and video files locally 
 transcribe-web.bat     # Windows
 ```
 
-Then open: **http://localhost:5000**
+Then open: **http://localhost:5731**
 
 📖 **[Full Web Interface Guide →](WEB_INTERFACE.md)**
 
@@ -52,7 +52,8 @@ Then open: **http://localhost:5000**
 - 🎭 **Animated Quote Detection**: Find the most exciting quotes with voice inflection analysis
 - 📋 **Two-List Quote Detection**: Generate two distinct lists - arbitrary quotes and animated quotes with topic mix
 - 🏷️ **Topic Classification**: Automatically categorize content (Cisco AI topics)
-- 👥 **Speaker Detection**: Identify speaker changes and assign speaker IDs
+- 🎤 **AI Speaker Detection**: Local voice-based speaker identification (no cloud/account needed!)
+- 👥 **Custom Speaker Names**: Assign names to detected speakers automatically
 - ⏱️ **Precise Timestamps**: Exact 15-second quote segments with timestamps
 - 🌐 **Web Interface**: Browser-based UI for non-technical users (NEW!)
 - 🐳 **Docker Support**: Run anywhere with zero setup hassles
@@ -77,7 +78,7 @@ Then open: **http://localhost:5000**
 transcribe-web.bat
 ```
 
-3. Open browser to: **http://localhost:5000**
+3. Open browser to: **http://localhost:5731**
 4. Drag & drop files, select options, and download results!
 
 📖 **[Complete Web Interface Guide →](WEB_INTERFACE.md)**
@@ -102,6 +103,12 @@ transcribe-web.bat
 
 # Generate two lists of quotes
 ./transcribe.sh /path/to/video.mp4 --two-lists
+
+# Enable speaker detection
+./transcribe.sh /path/to/video.mp4 --speaker-diarization
+
+# Speaker detection with custom names
+./transcribe.sh /path/to/video.mp4 --speaker-diarization --speaker-names "Alice,Bob,Charlie"
 
 # Specify language
 ./transcribe.sh /path/to/video.mp4 --language es

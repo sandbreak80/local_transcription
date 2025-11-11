@@ -17,9 +17,10 @@
         <div class="upload-section">
             <div class="upload-box" id="uploadBox">
                 <div class="upload-icon">📁</div>
-                <h2>Drop files here or click to browse</h2>
-                <p>Supports: MP4, MP3, WAV, AVI, MOV, MKV, and more</p>
+                <h2 id="uploadTitle">Drop files here or click to browse</h2>
+                <p id="uploadDescription">Supports: MP4, MP3, WAV, AVI, MOV, MKV, and more</p>
                 <p class="size-limit">Max file size: 2GB per file</p>
+                <div id="fileList" style="display: none; margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: left;"></div>
                 <input type="file" id="fileInput" multiple accept="audio/*,video/*" style="display: none;">
             </div>
 
@@ -68,6 +69,26 @@
                         <input type="checkbox" id="twoListQuotes">
                         <span>Generate Two-List Quotes</span>
                     </label>
+                </div>
+
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">🎤 Speaker Options (NEW!)</h3>
+                
+                <div class="option-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="speakerDiarization">
+                        <span>AI Speaker Diarization (Accurate speaker detection)</span>
+                    </label>
+                </div>
+
+                <div class="option-group">
+                    <label for="numSpeakers">Number of Speakers (optional):</label>
+                    <input type="number" id="numSpeakers" min="1" max="10" placeholder="Auto-detect if empty" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;">
+                </div>
+
+                <div class="option-group">
+                    <label for="speakerNames">Speaker Names (optional, comma-separated):</label>
+                    <input type="text" id="speakerNames" placeholder="e.g., Alice,Bob,Charlie" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;">
+                    <small style="color: #666; display: block; margin-top: 5px;">Simply list names (comma-separated). System automatically assigns them to detected speakers in order.</small>
                 </div>
 
                 <button id="uploadBtn" class="btn-primary" disabled>

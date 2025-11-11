@@ -38,13 +38,18 @@ uploadBox.addEventListener('drop', (e) => {
 function handleFiles(files) {
     selectedFiles = Array.from(files);
     
+    const uploadTitle = document.getElementById('uploadTitle');
+    const uploadDescription = document.getElementById('uploadDescription');
+    const fileListDiv = document.getElementById('fileList');
+    
     if (selectedFiles.length > 0) {
         uploadBtn.disabled = false;
-        uploadBox.querySelector('h2').textContent = 
-            `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} selected`;
+        uploadTitle.textContent = `✅ ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} selected`;
+        uploadDescription.style.display = 'none';
         
-        const fileList = selectedFiles.map(f => `• ${f.name} (${formatFileSize(f.size)})`).join('<br>');
-        uploadBox.querySelector('p').innerHTML = fileList;
+        const fileList = selectedFiles.map(f => `<div style="padding: 5px 0; color: #fff;">📄 ${f.name} <span style="color: #aaa;">(${formatFileSize(f.size)})</span></div>`).join('');
+        fileListDiv.innerHTML = fileList;
+        fileListDiv.style.display = 'block';
     } else {
         uploadBtn.disabled = true;
         resetUploadBox();
@@ -52,8 +57,11 @@ function handleFiles(files) {
 }
 
 function resetUploadBox() {
-    uploadBox.querySelector('h2').textContent = 'Drop files here or click to browse';
-    uploadBox.querySelector('p').textContent = 'Supports: MP4, MP3, WAV, AVI, MOV, MKV, and more';
+    document.getElementById('uploadTitle').textContent = 'Drop files here or click to browse';
+    document.getElementById('uploadDescription').textContent = 'Supports: MP4, MP3, WAV, AVI, MOV, MKV, and more';
+    document.getElementById('uploadDescription').style.display = 'block';
+    document.getElementById('fileList').style.display = 'none';
+    document.getElementById('fileList').innerHTML = '';
 }
 
 // Upload and start transcription
@@ -68,6 +76,17 @@ uploadBtn.addEventListener('click', async () => {
     formData.append('language', document.getElementById('languageSelect').value);
     formData.append('animated_quotes', document.getElementById('animatedQuotes').checked);
     formData.append('two_list_quotes', document.getElementById('twoListQuotes').checked);
+    
+    // Add speaker options
+    formData.append('speaker_diarization', document.getElementById('speakerDiarization').checked);
+    const numSpeakers = document.getElementById('numSpeakers').value;
+    if (numSpeakers) {
+        formData.append('num_speakers', numSpeakers);
+    }
+    const speakerNames = document.getElementById('speakerNames').value;
+    if (speakerNames) {
+        formData.append('speaker_names', speakerNames);
+    }
     
     // Disable upload button
     uploadBtn.disabled = true;
@@ -229,9 +248,34 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
+// Load existing jobs on page load
+async function loadExistingJobs() {
+    try {
+        // First, scan for any existing output files
+        await fetch('/scan-outputs');
+        
+        // Then fetch all jobs
+        const response = await fetch('/status');
+        const data = await response.json();
+        
+        if (data.jobs && data.jobs.length > 0) {
+            jobsSection.style.display = 'block';
+            data.jobs.forEach(job => {
+                createJobCard(job.id, job.filename);
+                updateJobCard(job);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading existing jobs:', error);
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Local Transcription Tool - Web Interface Ready');
     console.log('Author: Brad Stoner (bmstoner@cisco.com)');
+    
+    // Load any existing completed jobs
+    loadExistingJobs();
 });
 

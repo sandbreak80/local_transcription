@@ -16,14 +16,28 @@ from datetime import datetime
 from animated_quotes import AnimatedQuoteDetector
 from two_list_quotes import TwoListQuoteDetector
 
+# Speaker detection: Try local first (no token needed), fallback to cloud-based
+SPEAKER_DETECTION_AVAILABLE = False
+LocalSpeakerDetector = None
+
+try:
+    from local_speaker_detection import LocalSpeakerDetector, format_speaker_stats
+    SPEAKER_DETECTION_AVAILABLE = True
+    print("✅ Local speaker detection loaded (no account needed!)")
+except ImportError as e:
+    print(f"⚠️  Local speaker detection not available: {e}")
+    LocalSpeakerDetector = None
+    format_speaker_stats = None
+
 
 class MediaTranscriber:
-    def __init__(self, model_size="base"):
+    def __init__(self, model_size="base", enable_speaker_diarization=False):
         """
         Initialize the transcriber with a Whisper model.
         
         Args:
             model_size (str): Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
+            enable_speaker_diarization (bool): Enable AI-powered speaker diarization
         """
         self.model_size = model_size
         self.model = None
@@ -33,6 +47,15 @@ class MediaTranscriber:
         }
         self.quote_detector = None
         self.two_list_detector = None
+        self.speaker_diarizer = None
+        self.enable_speaker_diarization = enable_speaker_diarization
+        
+        if enable_speaker_diarization:
+            if SPEAKER_DETECTION_AVAILABLE and LocalSpeakerDetector:
+                self.speaker_diarizer = LocalSpeakerDetector()
+            else:
+                click.echo("⚠️  Speaker diarization requested but not available.")
+                click.echo("   Continuing with basic speaker detection.")
     
     def load_model(self):
         """Load the Whisper model."""
@@ -57,6 +80,103 @@ class MediaTranscriber:
                 list1_duration, list1_count, list2_max_duration, list2_count
             )
             click.echo("Two-list detector loaded successfully!")
+    
+    def apply_speaker_diarization(self, result, audio_path, num_speakers=None, speaker_name_mapping=None):
+        """
+        Apply AI-powered speaker diarization to transcription result.
+        
+        Args:
+            result: Transcription result dictionary
+            audio_path: Path to audio file
+            num_speakers: Expected number of speakers (optional)
+            speaker_name_mapping: Dictionary mapping speaker IDs to names (optional)
+            
+        Returns:
+            Updated result with speaker information
+        """
+        if not self.speaker_diarizer:
+            return result
+        
+        try:
+            # Perform diarization using LocalSpeakerDetector
+            if result.get('segments'):
+                result['segments'] = self.speaker_diarizer.diarize(
+                    audio_path,
+                    result['segments'],
+                    num_speakers
+                )
+                
+                # Apply speaker name mapping if provided
+                if speaker_name_mapping:
+                    # Apply the pre-built name mapping from main()
+                    for segment in result['segments']:
+                        if 'speaker_id' in segment and segment['speaker_id'] in speaker_name_mapping:
+                            segment['speaker_id'] = speaker_name_mapping[segment['speaker_id']]
+                    
+                    # Print the mapping for user reference
+                    click.echo(f"\n👥 Speaker Name Mapping Applied:")
+                    for speaker_id, name in sorted(speaker_name_mapping.items()):
+                        click.echo(f"   {speaker_id} → {name}")
+                
+                # Get speaker statistics
+                speaker_counts = {}
+                for segment in result['segments']:
+                    if 'speaker_id' in segment:
+                        speaker_id = segment['speaker_id']
+                        speaker_counts[speaker_id] = speaker_counts.get(speaker_id, 0) + 1
+                
+                if speaker_counts:
+                    click.echo(f"\n📊 Speaker Statistics:")
+                    for speaker_id in sorted(speaker_counts.keys()):
+                        click.echo(f"   {speaker_id}: {speaker_counts[speaker_id]} segments")
+            
+            return result
+            
+        except Exception as e:
+            click.echo(f"⚠️  Speaker diarization failed: {e}")
+            click.echo("   Continuing without speaker labels")
+            return result
+    
+    def apply_basic_speaker_detection(self, result, num_speakers=None, speaker_name_mapping=None):
+        """
+        Apply basic speaker detection based on silence gaps and timing.
+        
+        Args:
+            result: Transcription result dictionary
+            num_speakers: Expected number of speakers (optional)
+            speaker_name_mapping: Dictionary mapping speaker IDs to names
+            
+        Returns:
+            Updated result with speaker IDs added to segments
+        """
+        if not result.get('segments'):
+            return result
+        
+        segments = result['segments']
+        current_speaker = 0
+        last_end_time = 0
+        silence_threshold = 2.0  # Seconds of silence that indicate speaker change
+        
+        # Add speaker IDs based on silence gaps
+        for segment in segments:
+            start_time = segment.get('start', 0)
+            
+            # If there's a significant gap, assume speaker changed
+            if start_time - last_end_time > silence_threshold and last_end_time > 0:
+                current_speaker = (current_speaker + 1) % (num_speakers if num_speakers else 10)
+            
+            # Assign speaker ID
+            speaker_id = f"SPEAKER_{current_speaker:02d}"
+            
+            # Apply custom name if provided
+            if speaker_name_mapping and speaker_id in speaker_name_mapping:
+                segment['speaker_id'] = speaker_name_mapping[speaker_id]
+            else:
+                segment['speaker_id'] = speaker_id
+            
+            last_end_time = segment.get('end', 0)
+        
+        return result
     
     def is_supported_file(self, file_path):
         """Check if the file format is supported."""
@@ -246,11 +366,13 @@ class MediaTranscriber:
             start_time = segment.get('start', 0)
             end_time = segment.get('end', 0)
             text = segment.get('text', '').strip()
+            speaker_id = segment.get('speaker_id', None) or segment.get('speaker', None)
             
             # Check for speaker change (gap > 2 seconds indicates potential speaker change)
             if start_time - last_end_time > 2.0 and last_end_time > 0:
-                # Add speaker change indicator
-                formatted_lines.append(f"\n[Speaker Change - Gap: {start_time - last_end_time:.1f}s]")
+                # Add speaker change indicator (only if no speaker IDs exist)
+                if not speaker_id:
+                    formatted_lines.append(f"\n[Speaker Change - Gap: {start_time - last_end_time:.1f}s]")
             
             # Split text into sentences for better readability
             sentences = self._split_into_sentences(text)
@@ -260,7 +382,8 @@ class MediaTranscriber:
                 formatted_lines.append(self._format_sentence_line([{
                     'text': sentences[0],
                     'start': start_time,
-                    'end': end_time
+                    'end': end_time,
+                    'speaker_id': speaker_id
                 }]))
             else:
                 # Multiple sentences - distribute time proportionally
@@ -274,7 +397,8 @@ class MediaTranscriber:
                     formatted_lines.append(self._format_sentence_line([{
                         'text': sentence,
                         'start': sentence_start,
-                        'end': sentence_end
+                        'end': sentence_end,
+                        'speaker_id': speaker_id
                     }]))
             
             last_end_time = end_time
@@ -307,7 +431,7 @@ class MediaTranscriber:
     
     def _format_sentence_line(self, sentence_buffer):
         """
-        Format a sentence with its timestamp.
+        Format a sentence with its timestamp and speaker ID if available.
         
         Args:
             sentence_buffer: List of sentence data
@@ -325,11 +449,18 @@ class MediaTranscriber:
         start_time = sentence_buffer[0]['start']
         end_time = sentence_buffer[-1]['end']
         
+        # Check if speaker ID is available
+        speaker_id = sentence_buffer[0].get('speaker_id', None)
+        
         # Format timestamp
         start_formatted = self._format_timestamp(start_time)
         end_formatted = self._format_timestamp(end_time)
         
-        return f"[{start_formatted} - {end_formatted}] {combined_text}"
+        # Include speaker ID if available
+        if speaker_id:
+            return f"[{start_formatted} - {end_formatted}] {speaker_id}: {combined_text}"
+        else:
+            return f"[{start_formatted} - {end_formatted}] {combined_text}"
     
     def _format_timestamp(self, seconds):
         """
@@ -587,7 +718,13 @@ class MediaTranscriber:
               help='Number of arbitrary quotes in List 1 (default: 10)')
 @click.option('--list2-count', default=12, type=int,
               help='Number of animated quotes in List 2 (default: 12)')
-def main(input_path, model, language, task, output_dir, batch, recursive, animated_quotes, quote_duration, num_quotes, two_lists, list1_count, list2_count):
+@click.option('--speaker-diarization', '-s', is_flag=True,
+              help='Enable AI-powered speaker diarization for accurate speaker detection')
+@click.option('--num-speakers', type=int, default=None,
+              help='Expected number of speakers (optional, auto-detect if not specified)')
+@click.option('--speaker-names', type=str, default=None,
+              help='Comma-separated speaker names (e.g., "Alice,Bob,Charlie")')
+def main(input_path, model, language, task, output_dir, batch, recursive, animated_quotes, quote_duration, num_quotes, two_lists, list1_count, list2_count, speaker_diarization, num_speakers, speaker_names):
     """
     Transcribe media files using OpenAI Whisper.
     
@@ -638,10 +775,37 @@ def main(input_path, model, language, task, output_dir, batch, recursive, animat
             click.echo(f"Error: Unsupported file format: {input_path.suffix}", err=True)
             return
         
+        # Process speaker names if provided
+        speaker_name_mapping = {}
+        if speaker_names:
+            names = [n.strip() for n in speaker_names.split(',')]
+            for i, name in enumerate(names):
+                speaker_name_mapping[f'SPEAKER_{i:02d}'] = name
+        
         try:
+            # Initialize transcriber with speaker detection if requested
+            if speaker_diarization:
+                if SPEAKER_DETECTION_AVAILABLE:
+                    click.echo("🎤 Local voice-based speaker detection enabled...")
+                    transcriber = MediaTranscriber(model_size=model, enable_speaker_diarization=True)
+                else:
+                    click.echo("⚠️  Speaker detection not available, using basic detection")
+                    transcriber = MediaTranscriber(model_size=model)
+            else:
+                transcriber = MediaTranscriber(model_size=model)
+            
             if two_lists:
                 # Detect two-list quotes
                 result = transcriber.detect_two_list_quotes(input_path, 15.0, list1_count, 15.0, list2_count)
+                
+                # Apply speaker detection if enabled
+                if speaker_diarization:
+                    if transcriber.speaker_diarizer:
+                        # Use AI-powered diarization
+                        result = transcriber.apply_speaker_diarization(result, str(input_path), num_speakers, speaker_name_mapping)
+                    else:
+                        # Use basic silence-based detection
+                        result = transcriber.apply_basic_speaker_detection(result, num_speakers, speaker_name_mapping)
                 
                 # Save transcription
                 transcriber.save_transcription(result, output_dir)
@@ -682,6 +846,15 @@ def main(input_path, model, language, task, output_dir, batch, recursive, animat
                 # Detect animated quotes
                 result = transcriber.detect_animated_quotes(input_path, quote_duration, num_quotes)
                 
+                # Apply speaker detection if enabled
+                if speaker_diarization:
+                    if transcriber.speaker_diarizer:
+                        # Use AI-powered diarization
+                        result = transcriber.apply_speaker_diarization(result, str(input_path), num_speakers, speaker_name_mapping)
+                    else:
+                        # Use basic silence-based detection
+                        result = transcriber.apply_basic_speaker_detection(result, num_speakers, speaker_name_mapping)
+                
                 # Save transcription
                 transcriber.save_transcription(result, output_dir)
                 
@@ -709,6 +882,15 @@ def main(input_path, model, language, task, output_dir, batch, recursive, animat
             else:
                 # Regular transcription
                 result = transcriber.transcribe_file(input_path, language, task)
+                
+                # Apply speaker detection if enabled
+                if speaker_diarization:
+                    if transcriber.speaker_diarizer:
+                        # Use AI-powered diarization
+                        result = transcriber.apply_speaker_diarization(result, str(input_path), num_speakers, speaker_name_mapping)
+                    else:
+                        # Use basic silence-based detection
+                        result = transcriber.apply_basic_speaker_detection(result, num_speakers, speaker_name_mapping)
                 
                 # Save transcription
                 transcriber.save_transcription(result, output_dir)
