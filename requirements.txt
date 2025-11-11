@@ -8,3 +8,5 @@ librosa
 numpy
 scipy
 scikit-learn
+flask
+werkzeug

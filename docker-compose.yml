@@ -1,10 +1,11 @@
 version: '3.8'
 
 services:
+  # CLI Mode - Command-line transcription
   transcribe:
     build: .
     image: local-transcription
-    container_name: transcription-service
+    container_name: transcription-cli
     volumes:
       # Mount your media directory here
       - ./media:/media
@@ -12,8 +13,23 @@ services:
     # Uncomment below to specify a specific video file
     # command: /media/your-video.mp4 --model base
 
+  # Web Interface Mode - Browser-based UI (NEW!)
+  web:
+    build: .
+    image: local-transcription
+    container_name: transcription-web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./outputs:/tmp/transcription_outputs
+    command: python /app/app.py
+    environment:
+      - FLASK_ENV=production
+
 # Usage Examples:
 # 
+# CLI Mode:
+# --------
 # 1. Build the image:
 #    docker-compose build
 #
@@ -26,6 +42,13 @@ services:
 # 4. Transcribe with options:
 #    docker-compose run --rm transcribe /media/video.mp4 --model large --animated-quotes
 #
-# 5. Use custom volume mount:
-#    docker-compose run --rm -v /path/to/your/videos:/media transcribe /media/video.mp4
+# Web Interface Mode (NEW!):
+# --------------------------
+# 1. Start web server:
+#    docker-compose up web
+#
+# 2. Open browser to:
+#    http://localhost:5000
+#
+# 3. Upload files, select options, and download results!
 

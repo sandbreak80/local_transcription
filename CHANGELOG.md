@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2024-11-10
+
+### Added - Web Interface 🌐
+This is a major feature release adding a complete web-based user interface!
+
+#### Web Interface Features
+- **🌐 Browser-Based UI**: Modern, beautiful web interface for non-technical users
+- **🖱️ Drag & Drop Upload**: Easy file selection with drag-and-drop support
+- **📊 Real-Time Progress**: Live progress bars showing transcription status
+- **🎯 Visual Options**: Point-and-click selection for models, languages, and features
+- **📥 Auto Downloads**: Instant download of completed transcriptions
+- **🔄 Multiple Files**: Queue-based processing of multiple files simultaneously
+- **📱 Responsive Design**: Works on desktop, tablet, and mobile devices
+- **🎨 Modern UI**: Gradient backgrounds, smooth animations, clean design
+
+#### New Files
+- `app.py` - Flask web application with job queue and processing
+- `templates/index.html` - Beautiful HTML interface
+- `static/css/style.css` - Modern, responsive CSS styling
+- `static/js/app.js` - Dynamic frontend with real-time updates
+- `transcribe-web.sh` - Web launcher for Mac/Linux
+- `transcribe-web.bat` - Web launcher for Windows
+- `WEB_INTERFACE.md` - Complete web interface documentation
+
+#### Updated Files
+- `Dockerfile` - Added web interface support, exposed port 5000
+- `docker-compose.yml` - Added `web` service for browser access
+- `requirements.txt` - Added Flask and Werkzeug dependencies
+- `README.md` - Added web interface section and quick start
+- `.dockerignore` - Added web-related entries
+
+#### Technical Details
+- Flask web server on port 5000
+- Background worker thread for job processing
+- Queue-based job management
+- Real-time status polling (2-second intervals)
+- Support for files up to 2GB
+- Automatic cleanup of processed files
+- JSON API endpoints for status and downloads
+
+### Enhanced
+- Docker container now supports both CLI and Web modes
+- Better documentation structure with web UI guide
+- Improved user experience for non-technical users
+
 ## [1.0.1] - 2024-11-10
 
 ### Changed

@@ -4,19 +4,41 @@ A powerful, privacy-focused tool for transcribing audio and video files locally 
 
 **Author:** Brad Stoner (bmstoner@cisco.com)  
 **Created for:** Splunk and Cisco  
-**Version:** 1.0.1
+**Version:** 1.1.0
 
 ---
 
 ## 📖 Quick Navigation
 
-**New here?** → [START_HERE.md](START_HERE.md) | **Quick Start** → [QUICKSTART.md](QUICKSTART.md) | **Examples** → [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)
+**New here?** → [START_HERE.md](START_HERE.md) | **Quick Start** → [QUICKSTART.md](QUICKSTART.md) | **🌐 Web UI** → [WEB_INTERFACE.md](WEB_INTERFACE.md)
 
-**Share** → [SHARING.md](SHARING.md) | **Contribute** → [CONTRIBUTING.md](CONTRIBUTING.md) | **Docker** → [DOCKER.md](DOCKER.md)
+**Examples** → [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) | **Docker** → [DOCKER.md](DOCKER.md) | **Share** → [SHARING.md](SHARING.md)
 
 ---
 
 > **🚀 New here? Start with [START_HERE.md](START_HERE.md) - Complete guide in one place!**
+
+## ✨ NEW! Web Interface 🌐
+
+**Perfect for non-technical users!** No command line needed!
+
+- 🖱️ **Drag & Drop Interface** - Just drop your files
+- 📊 **Real-Time Progress Bars** - See live processing status
+- 🎯 **Visual Options** - Select model, language, and features with clicks
+- 📥 **Auto Downloads** - Results ready instantly
+- 🚀 **Multiple Files** - Process many files with queue management
+
+**Launch Web Interface:**
+```bash
+./transcribe-web.sh    # Mac/Linux
+transcribe-web.bat     # Windows
+```
+
+Then open: **http://localhost:5000**
+
+📖 **[Full Web Interface Guide →](WEB_INTERFACE.md)**
+
+---
 
 ## Features
 
@@ -32,18 +54,39 @@ A powerful, privacy-focused tool for transcribing audio and video files locally 
 - 🏷️ **Topic Classification**: Automatically categorize content (Cisco AI topics)
 - 👥 **Speaker Detection**: Identify speaker changes and assign speaker IDs
 - ⏱️ **Precise Timestamps**: Exact 15-second quote segments with timestamps
+- 🌐 **Web Interface**: Browser-based UI for non-technical users (NEW!)
 - 🐳 **Docker Support**: Run anywhere with zero setup hassles
 - 🔒 **Privacy**: Everything runs locally, no data leaves your machine
 
-## Quick Start (Docker - Recommended)
+## Quick Start
 
-The easiest way to use this tool is with Docker. No Python setup, no dependency management - just Docker!
+### Option 1: Web Interface (Easiest!)
 
-### Prerequisites
+**Perfect for beginners and non-technical users!**
 
-- Install [Docker Desktop](https://www.docker.com/products/docker-desktop) for your platform
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
+2. Run the web interface:
 
-### Usage
+**macOS/Linux:**
+```bash
+./transcribe-web.sh
+```
+
+**Windows:**
+```batch
+transcribe-web.bat
+```
+
+3. Open browser to: **http://localhost:5000**
+4. Drag & drop files, select options, and download results!
+
+📖 **[Complete Web Interface Guide →](WEB_INTERFACE.md)**
+
+---
+
+### Option 2: Command Line (Docker)
+
+**For power users and automation!**
 
 **macOS/Linux:**
 

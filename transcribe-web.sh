@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Local Transcription Tool - Web Interface Launcher (Mac/Linux)
+# Author: Brad Stoner (bmstoner@cisco.com)
+# Created for: Splunk and Cisco
+
+set -e
+
+IMAGE_NAME="local-transcription-tool"
+PORT="${PORT:-5000}"
+
+echo "=========================================="
+echo "🎙️  Local Transcription Tool - Web UI"
+echo "=========================================="
+echo ""
+
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo "❌ Error: Docker is not installed or not in PATH"
+    echo ""
+    echo "Please install Docker Desktop from:"
+    echo "  https://www.docker.com/products/docker-desktop"
+    exit 1
+fi
+
+# Check if Docker is running
+if ! docker info &> /dev/null; then
+    echo "❌ Error: Docker is not running"
+    echo ""
+    echo "Please start Docker Desktop and try again."
+    exit 1
+fi
+
+echo "✅ Docker is ready"
+echo ""
+
+# Check if image exists
+if ! docker image inspect "$IMAGE_NAME" &> /dev/null; then
+    echo "🔨 Building Docker image (first time only, may take 5-10 minutes)..."
+    echo ""
+    docker build -t "$IMAGE_NAME" "$(dirname "$0")"
+    echo ""
+    echo "✅ Image built successfully!"
+    echo ""
+else
+    echo "✅ Docker image ready"
+    echo ""
+fi
+
+echo "🌐 Starting web server on http://localhost:$PORT"
+echo ""
+echo "📋 Instructions:"
+echo "  1. Open your browser to http://localhost:$PORT"
+echo "  2. Upload your audio/video files"
+echo "  3. Select options and start transcription"
+echo "  4. Download results when complete"
+echo ""
+echo "⏹️  To stop: Press Ctrl+C"
+echo ""
+echo "=========================================="
+echo ""
+
+# Run the container with web interface
+docker run -it --rm \
+    -p "$PORT:5000" \
+    -v "$(pwd)/outputs:/tmp/transcription_outputs" \
+    "$IMAGE_NAME" \
+    python3 /app/app.py
+
+echo ""
+echo "👋 Web server stopped."
+
