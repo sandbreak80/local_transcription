@@ -35,6 +35,7 @@ except (ImportError, AttributeError, Exception) as e:
 
 import librosa
 from sklearn.cluster import AgglomerativeClustering
+from sklearn.metrics import silhouette_score
 from scipy.spatial.distance import cosine
 
 
@@ -167,32 +168,83 @@ class LocalSpeakerDetector:
         
         if not valid_embeddings:
             return [0] * len(embeddings)
-        
-        # Convert to numpy array
+
+        # Need at least 2 embeddings to cluster
+        if len(valid_embeddings) == 1:
+            return [0] * len(embeddings)
+
         X = np.array(valid_embeddings)
-        
-        # Determine number of clusters
+
         if num_speakers is None:
-            # Auto-detect using elbow method (simplified)
-            num_speakers = min(len(valid_embeddings), 10)  # Max 10 speakers
-        
-        num_speakers = min(num_speakers, len(valid_embeddings))
-        
-        # Perform clustering
+            num_speakers = self._auto_detect_speakers(X)
+
+        num_speakers = max(1, min(num_speakers, len(valid_embeddings)))
+
+        if num_speakers == 1:
+            result = [0] * len(embeddings)
+            return result
+
         clustering = AgglomerativeClustering(
             n_clusters=num_speakers,
             metric='cosine',
             linkage='average'
         )
-        
         labels = clustering.fit_predict(X)
-        
-        # Map back to full list
-        result = [0] * len(embeddings)
+
+        # Map back to full list — use -1 for None embeddings (too short)
+        result = [-1] * len(embeddings)
         for i, idx in enumerate(valid_indices):
             result[idx] = int(labels[i])
-        
+
+        # Assign short segments to nearest neighbor speaker
+        for i, label in enumerate(result):
+            if label == -1:
+                result[i] = self._nearest_speaker(i, result)
+
         return result
+
+    def _auto_detect_speakers(self, X: np.ndarray) -> int:
+        """Auto-detect number of speakers using silhouette score."""
+        n_samples = len(X)
+        max_k = min(n_samples - 1, 10)  # Max 10 speakers
+
+        if max_k < 2:
+            return 1
+
+        best_k = 2
+        best_score = -1
+
+        for k in range(2, max_k + 1):
+            try:
+                clustering = AgglomerativeClustering(
+                    n_clusters=k, metric='cosine', linkage='average')
+                labels = clustering.fit_predict(X)
+
+                # Skip if all in one cluster
+                if len(set(labels)) < 2:
+                    continue
+
+                score = silhouette_score(X, labels, metric='cosine')
+                print(f"  k={k}: silhouette={score:.3f}")
+
+                if score > best_score:
+                    best_score = score
+                    best_k = k
+            except Exception:
+                continue
+
+        print(f"  Auto-detected {best_k} speakers (silhouette={best_score:.3f})")
+        return best_k
+
+    def _nearest_speaker(self, idx: int, labels: list) -> int:
+        """Assign a short segment to the nearest valid speaker by proximity."""
+        # Look outward from idx for the nearest labeled segment
+        for dist in range(1, len(labels)):
+            if idx - dist >= 0 and labels[idx - dist] >= 0:
+                return labels[idx - dist]
+            if idx + dist < len(labels) and labels[idx + dist] >= 0:
+                return labels[idx + dist]
+        return 0
     
     def diarize(self, audio_path: str, segments: List[Dict], num_speakers: Optional[int] = None) -> List[Dict]:
         """

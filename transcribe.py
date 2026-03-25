@@ -331,31 +331,26 @@ class MediaTranscriber:
         else:
             vtt_path = file_path.parent / f"{file_path.stem}.vtt"
 
-        # Save as WebVTT
+        # Merge consecutive segments from the same speaker into longer blocks
         segments = result.get('segments', [])
+        merged = self._merge_speaker_segments(segments)
+
+        # Save as WebVTT
         with open(vtt_path, 'w', encoding='utf-8') as f:
             f.write("WEBVTT\n")
             f.write(f"NOTE Transcription of {file_path.name}\n")
             f.write(f"NOTE Language: {result.get('language', 'unknown')}\n\n")
 
-            for i, segment in enumerate(segments):
-                start = segment.get('start', 0)
-                end = segment.get('end', 0)
-                text = segment.get('text', '').strip()
-                speaker_id = segment.get('speaker_id') or segment.get('speaker')
-
-                if not text:
-                    continue
-
-                start_ts = self._format_vtt_timestamp(start)
-                end_ts = self._format_vtt_timestamp(end)
+            for i, seg in enumerate(merged):
+                start_ts = self._format_vtt_timestamp(seg['start'])
+                end_ts = self._format_vtt_timestamp(seg['end'])
 
                 f.write(f"{i + 1}\n")
                 f.write(f"{start_ts} --> {end_ts}\n")
-                if speaker_id:
-                    f.write(f"<v {speaker_id}>{text}\n")
+                if seg.get('speaker'):
+                    f.write(f"<v {seg['speaker']}>{seg['text']}\n")
                 else:
-                    f.write(f"{text}\n")
+                    f.write(f"{seg['text']}\n")
                 f.write("\n")
 
         # Save detailed JSON
@@ -503,6 +498,54 @@ class MediaTranscriber:
         secs = seconds % 60
         
         return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
+
+    def _merge_speaker_segments(self, segments, max_gap=2.0, max_duration=30.0):
+        """Merge consecutive segments from the same speaker into longer blocks.
+
+        Args:
+            segments: Raw Whisper segments (may have speaker_id)
+            max_gap: Max silence gap (seconds) before forcing a new block
+            max_duration: Max duration of a merged block (seconds)
+
+        Returns:
+            List of merged segments: [{'start', 'end', 'text', 'speaker'}, ...]
+        """
+        if not segments:
+            return []
+
+        merged = []
+        current = None
+
+        for seg in segments:
+            text = seg.get('text', '').strip()
+            if not text:
+                continue
+
+            speaker = seg.get('speaker_id') or seg.get('speaker') or ''
+            start = seg.get('start', 0)
+            end = seg.get('end', 0)
+
+            if current is None:
+                current = {'start': start, 'end': end, 'text': text, 'speaker': speaker}
+                continue
+
+            same_speaker = (speaker == current['speaker'])
+            gap = start - current['end']
+            duration = end - current['start']
+
+            if same_speaker and gap <= max_gap and duration <= max_duration:
+                # Merge into current block
+                current['end'] = end
+                current['text'] += ' ' + text
+            else:
+                # Start new block
+                merged.append(current)
+                current = {'start': start, 'end': end, 'text': text, 'speaker': speaker}
+
+        if current:
+            merged.append(current)
+
+        return merged
 
     def _format_vtt_timestamp(self, seconds):
         """Format timestamp in WebVTT format: HH:MM:SS.mmm"""
