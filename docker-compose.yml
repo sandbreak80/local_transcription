@@ -12,6 +12,13 @@ services:
     command: --help
     # Uncomment below to specify a specific video file
     # command: /media/your-video.mp4 --model base
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # Web Interface Mode - Browser-based UI (NEW!)
   web:
@@ -26,6 +33,13 @@ services:
     environment:
       - FLASK_ENV=production
       - FLASK_PORT=5731
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 # Usage Examples:
 # 
@@ -49,7 +63,7 @@ services:
 #    docker-compose up web
 #
 # 2. Open browser to:
-#    http://localhost:5000
+#    http://localhost:5731
 #
 # 3. Upload files, select options, and download results!
 

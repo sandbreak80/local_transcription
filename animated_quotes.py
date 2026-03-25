@@ -307,27 +307,35 @@ class AnimatedQuoteDetector:
             'product_pipeline': 4    # Remaining 1 quote goes to strongest category
         }
         
+        # Track selected segment indices to avoid duplicates
+        selected_indices = set()
+
         # First pass: select best quotes for each topic
         for quote in candidates:
             if topic_counts[quote.topic_category] < target_counts[quote.topic_category]:
+                if quote.segment_index in selected_indices:
+                    continue
                 # Adjust quote to be exactly 15 seconds
                 adjusted_quote = self._adjust_quote_duration(quote, segments)
                 if adjusted_quote:
                     selected_quotes.append(adjusted_quote)
+                    selected_indices.add(quote.segment_index)
                     topic_counts[quote.topic_category] += 1
-                    
+
                     if len(selected_quotes) >= self.num_quotes:
                         break
-        
+
         # If we don't have enough quotes, fill with remaining best candidates
         if len(selected_quotes) < self.num_quotes:
             for quote in candidates:
-                if quote not in selected_quotes:
-                    adjusted_quote = self._adjust_quote_duration(quote, segments)
-                    if adjusted_quote:
-                        selected_quotes.append(adjusted_quote)
-                        if len(selected_quotes) >= self.num_quotes:
-                            break
+                if quote.segment_index in selected_indices:
+                    continue
+                adjusted_quote = self._adjust_quote_duration(quote, segments)
+                if adjusted_quote:
+                    selected_quotes.append(adjusted_quote)
+                    selected_indices.add(quote.segment_index)
+                    if len(selected_quotes) >= self.num_quotes:
+                        break
         
         print(f"Final selection: {len(selected_quotes)} quotes selected")
         

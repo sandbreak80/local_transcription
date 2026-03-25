@@ -82,8 +82,16 @@ open_browser() {
 # Start browser opener in background
 open_browser &
 
+# Enable GPU if nvidia-smi is available
+GPU_FLAG=""
+if command -v nvidia-smi &> /dev/null && docker info 2>/dev/null | grep -q nvidia; then
+    GPU_FLAG="--gpus all"
+    echo "🚀 GPU acceleration enabled"
+fi
+
 # Run the container with web interface
 docker run -it --rm \
+    $GPU_FLAG \
     -p "$PORT:5731" \
     -e "FLASK_PORT=5731" \
     -v "$(pwd)/outputs:/tmp/transcription_outputs" \

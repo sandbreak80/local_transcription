@@ -58,10 +58,19 @@ class MediaTranscriber:
                 click.echo("   Continuing with basic speaker detection.")
     
     def load_model(self):
-        """Load the Whisper model."""
+        """Load the Whisper model, falling back to CPU if GPU runs out of memory."""
         if self.model is None:
             click.echo(f"Loading Whisper model '{self.model_size}'...")
-            self.model = whisper.load_model(self.model_size)
+            try:
+                self.model = whisper.load_model(self.model_size)
+            except RuntimeError as e:
+                if "CUDA" in str(e) or "out of memory" in str(e):
+                    click.echo(f"GPU out of memory, falling back to CPU...")
+                    import torch
+                    torch.cuda.empty_cache()
+                    self.model = whisper.load_model(self.model_size, device="cpu")
+                else:
+                    raise
             click.echo("Model loaded successfully!")
     
     def load_quote_detector(self, quote_duration=15.0, num_quotes=10):
@@ -200,8 +209,10 @@ class MediaTranscriber:
         if file_ext in self.supported_formats['audio'] + self.supported_formats['video']:
             # For both audio and video files, convert to WAV using FFmpeg
             if output_path is None:
-                output_path = str(Path(input_path).with_suffix('.wav'))
-            
+                # Avoid overwriting the input file when it's already a .wav
+                base = Path(input_path)
+                output_path = str(base.parent / (base.stem + '_converted.wav'))
+
             try:
                 (
                     ffmpeg
@@ -220,15 +231,16 @@ class MediaTranscriber:
     def transcribe_file(self, file_path, language=None, task="transcribe"):
         """
         Transcribe a single media file.
-        
+
         Args:
             file_path (str): Path to the media file
             language (str): Language code (optional, auto-detect if None)
             task (str): Task type ('transcribe' or 'translate')
-        
+
         Returns:
             dict: Transcription result with text and metadata
         """
+        file_path = str(file_path)
         if not self.is_supported_file(file_path):
             raise Exception(f"Unsupported file format: {Path(file_path).suffix}")
         
@@ -330,19 +342,18 @@ class MediaTranscriber:
             formatted_text = self._format_transcript_with_timestamps(result.get('segments', []))
             f.write(formatted_text)
         
-        # Save detailed JSON if segments are available
-        if result.get('segments'):
-            json_path = output_path.with_suffix('.json')
-            # Convert any Path objects to strings for JSON serialization
-            json_result = {
-                'text': result['text'],
-                'language': result.get('language', 'unknown'),
-                'segments': result.get('segments', []),
-                'file_path': str(result.get('file_path', '')),
-                'timestamp': result.get('timestamp', '')
-            }
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(json_result, f, indent=2, ensure_ascii=False)
+        # Save detailed JSON (always, so /scan-outputs can find paired .txt/.json)
+        json_path = output_path.with_suffix('.json')
+        # Convert any Path objects to strings for JSON serialization
+        json_result = {
+            'text': result['text'],
+            'language': result.get('language', 'unknown'),
+            'segments': result.get('segments', []),
+            'file_path': str(result.get('file_path', '')),
+            'timestamp': result.get('timestamp', '')
+        }
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_result, f, indent=2, ensure_ascii=False)
         
         click.echo(f"Transcription saved: {output_path}")
     
@@ -481,15 +492,16 @@ class MediaTranscriber:
     def detect_animated_quotes(self, file_path, quote_duration=15.0, num_quotes=10):
         """
         Detect animated quotes from a media file.
-        
+
         Args:
             file_path (str): Path to the media file
             quote_duration (float): Duration of each quote in seconds
             num_quotes (int): Number of quotes to return
-        
+
         Returns:
             dict: Result with transcription and animated quotes
         """
+        file_path = str(file_path)
         if not self.is_supported_file(file_path):
             raise Exception(f"Unsupported file format: {Path(file_path).suffix}")
         
@@ -599,17 +611,18 @@ class MediaTranscriber:
                               list2_max_duration=15.0, list2_count=12):
         """
         Detect two lists of quotes from a media file.
-        
+
         Args:
             file_path (str): Path to the media file
             list1_duration (float): Duration of List 1 quotes in seconds
             list1_count (int): Number of quotes in List 1
             list2_max_duration (float): Maximum duration of List 2 quotes in seconds
             list2_count (int): Number of quotes in List 2
-        
+
         Returns:
             dict: Result with transcription and two lists of quotes
         """
+        file_path = str(file_path)
         if not self.is_supported_file(file_path):
             raise Exception(f"Unsupported file format: {Path(file_path).suffix}")
         
@@ -738,7 +751,7 @@ def main(input_path, model, language, task, output_dir, batch, recursive, animat
         # Batch processing
         if input_path.is_file():
             click.echo("Error: --batch flag requires a directory path", err=True)
-            return
+            sys.exit(1)
         
         # Find all supported files
         file_paths = []
@@ -769,11 +782,11 @@ def main(input_path, model, language, task, output_dir, batch, recursive, animat
         # Single file processing
         if not input_path.is_file():
             click.echo("Error: Input path must be a file when not using --batch", err=True)
-            return
-        
+            sys.exit(1)
+
         if not transcriber.is_supported_file(input_path):
             click.echo(f"Error: Unsupported file format: {input_path.suffix}", err=True)
-            return
+            sys.exit(1)
         
         # Process speaker names if provided
         speaker_name_mapping = {}
@@ -902,7 +915,7 @@ def main(input_path, model, language, task, output_dir, batch, recursive, animat
             
         except Exception as e:
             click.echo(f"Error: {e}", err=True)
-            return
+            sys.exit(1)
 
 
 if __name__ == '__main__':

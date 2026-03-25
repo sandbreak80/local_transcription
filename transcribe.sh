@@ -68,7 +68,15 @@ echo "Transcribing: $FILE_NAME"
 echo "Output will be saved in: $FILE_DIR"
 echo ""
 
+# Enable GPU if nvidia-smi is available
+GPU_FLAG=""
+if command -v nvidia-smi &> /dev/null && docker info 2>/dev/null | grep -q nvidia; then
+    GPU_FLAG="--gpus all"
+    echo "🚀 GPU acceleration enabled"
+fi
+
 docker run --rm \
+    $GPU_FLAG \
     -v "$FILE_DIR:/media" \
     $IMAGE_NAME \
     "/media/$FILE_NAME" \
