@@ -1,8 +1,8 @@
 # 🎉 Release v1.2.0 - AI Speaker Detection
 
 **Release Date:** November 11, 2024  
-**Author:** Brad Stoner (bmstoner@cisco.com)  
-**Organization:** Splunk and Cisco
+**Author:**   
+**Organization:** 
 
 ---
 
@@ -265,9 +265,9 @@ This release introduces powerful AI-powered speaker detection that works 100% of
 
 ## 📞 Support
 
-**Author:** Brad Stoner  
-**Email:** bmstoner@cisco.com  
-**Organization:** Splunk and Cisco
+**Author:**   
+**Email:**   
+**Organization:** 
 
 For issues, questions, or feature requests, please contact the author.
 

@@ -3,8 +3,7 @@
 Advanced Speaker Diarization Module
 Uses pyannote.audio for AI-powered speaker detection
 
-Author: Brad Stoner (bmstoner@cisco.com)
-Created for: Splunk and Cisco
+Speaker Diarization Module
 """
 
 import os

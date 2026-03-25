@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Local Transcription Tool - Web Interface Launcher (Mac/Linux)
-# Author: Brad Stoner (bmstoner@cisco.com)
-# Created for: Splunk and Cisco
+# Local Transcription Tool - Web Interface Launcher
 
 set -e
 

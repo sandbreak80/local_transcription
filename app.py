@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Local Transcription Tool — Web Interface & REST API
-Author: Brad Stoner (bmstoner@cisco.com)
-Created for: Splunk and Cisco
+Local Transcription Tool
 
 API Endpoints (all under /api/v1):
   POST   /api/v1/jobs                Upload file(s) and start transcription (< 50MB)
@@ -870,7 +869,7 @@ def openapi_spec():
             "title": "Local Transcription Tool API",
             "description": "AI-powered audio & video transcription with GPU acceleration, speaker detection, and animated quote extraction. All processing runs locally.",
             "version": "2.0.0",
-            "contact": {"name": "Brad Stoner", "email": "bstoner@gmail.com"},
+            "contact": {"url": "https://github.com/sandbreak80/local_transcription"},
             "license": {"name": "MIT"},
         },
         "servers": [

@@ -155,6 +155,6 @@ If embedded model fails to load:
 
 ## Questions?
 
-Contact: Brad Stoner (bmstoner@cisco.com)  
-Created for: Splunk and Cisco
+Contact:   
+
 

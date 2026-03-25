@@ -4,8 +4,7 @@ Local Speaker Detection - NO external accounts required
 Uses speechbrain for voice-based speaker recognition
 Works completely offline after first model download
 
-Author: Brad Stoner (bmstoner@cisco.com)
-Created for: Splunk and Cisco
+Local Speaker Detection Module
 """
 
 import os

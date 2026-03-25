@@ -6,7 +6,7 @@ Run this ONCE on your machine, then the model is included in the Docker build.
 Usage:
     python3 download_speaker_model.py
 
-Author: Brad Stoner (bmstoner@cisco.com)
+Download Speaker Recognition Model
 """
 
 import os

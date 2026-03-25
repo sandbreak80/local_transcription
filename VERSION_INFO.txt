@@ -4,8 +4,8 @@
 ═══════════════════════════════════════════════════════════════
 
 RELEASE DATE: November 11, 2024
-AUTHOR: Brad Stoner (bmstoner@cisco.com)
-ORGANIZATION: Created for Splunk and Cisco
+AUTHOR: 
+ORGANIZATION: 
 
 ═══════════════════════════════════════════════════════════════
                        VERSION HISTORY
@@ -130,8 +130,8 @@ CHANGELOG.md .................... Version history
                         SUPPORT
 ═══════════════════════════════════════════════════════════════
 
-Email: bmstoner@cisco.com
-Organization: Splunk and Cisco
+Email: 
+Organization: 
 Documentation: See markdown files in project root
 
 ═══════════════════════════════════════════════════════════════

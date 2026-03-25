@@ -1,5 +1,5 @@
 // Local Transcription Tool - Web Interface JavaScript
-// Author: Brad Stoner (bmstoner@cisco.com)
+// Local Transcription Tool
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks (Cloudflare Tunnel safe)
 

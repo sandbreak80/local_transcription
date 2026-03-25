@@ -72,13 +72,13 @@ This document provides real-world examples of using the Local Media Transcriptio
 **Scenario:** You have a 1-hour product presentation and want to extract the most exciting 10 moments.
 
 ```bash
-./transcribe.sh ~/Videos/cisco-ai-presentation.mp4 --animated-quotes
+./transcribe.sh ~/Videos/example-presentation.mp4 --animated-quotes
 ```
 
 **Output:**
 - Regular transcription files
-- `cisco-ai-presentation_animated_quotes.txt` - Top 10 exciting quotes with timestamps
-- `cisco-ai-presentation_animated_quotes.json` - Structured data
+- `example-presentation_animated_quotes.txt` - Top 10 exciting quotes with timestamps
+- `example-presentation_animated_quotes.json` - Structured data
 
 **What you get:**
 - 10 most animated/excited quotes (15 seconds each)

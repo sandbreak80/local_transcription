@@ -1,7 +1,6 @@
 @echo off
 REM Local Transcription Tool - Web Interface Launcher (Windows)
-REM Author: Brad Stoner (bmstoner@cisco.com)
-REM Created for: Splunk and Cisco
+REM Local Transcription Tool - Web Interface Launcher
 
 setlocal EnableDelayedExpansion
 

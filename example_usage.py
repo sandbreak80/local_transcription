@@ -177,34 +177,34 @@ def example_animated_quotes():
         print(f"Error: {e}")
 
 
-def example_cisco_ai_content():
-    """Example: Processing Cisco AI content with animated quotes"""
-    print("\n=== Cisco AI Content Processing Example ===")
+def example_example_content():
+    """Example: Processing enterprise content with animated quotes"""
+    print("\n=== enterprise Content Processing Example ===")
     
     transcriber = MediaTranscriber(model_size="small")  # Use larger model for better accuracy
     
-    file_path = "cisco_ai_presentation.mp4"  # Replace with actual Cisco AI content
+    file_path = "example_presentation.mp4"  # Replace with actual enterprise content
     
     if not os.path.exists(file_path):
         print(f"Example file {file_path} not found.")
-        print("This example demonstrates processing Cisco AI content for animated quotes.")
-        print("Replace 'cisco_ai_presentation.mp4' with your actual Cisco AI video/audio file.")
+        print("This example demonstrates processing enterprise content for animated quotes.")
+        print("Replace 'example_presentation.mp4' with your actual enterprise video/audio file.")
         return
     
     try:
         # Process with animated quote detection
         result = transcriber.detect_animated_quotes(file_path, quote_duration=15.0, num_quotes=10)
         
-        print(f"Processing Cisco AI content: {result['file_path']}")
+        print(f"Processing enterprise content: {result['file_path']}")
         print(f"Language: {result['language']}")
         
         # Save comprehensive results
-        transcriber.save_transcription(result, "cisco_ai_output/")
-        transcriber.save_animated_quotes(result, "cisco_ai_output/")
+        transcriber.save_transcription(result, "example_output/")
+        transcriber.save_animated_quotes(result, "example_output/")
         
         # Display summary
         if result.get('animated_quotes'):
-            print(f"\nCisco AI Animated Quotes Summary:")
+            print(f"\nenterprise Animated Quotes Summary:")
             print(f"Total quotes found: {len(result['animated_quotes'])}")
             
             # Group by topic
@@ -225,7 +225,7 @@ def example_cisco_ai_content():
                         print(f"  [{start_time}] Score: {quote.animatedness_score:.3f}")
                         print(f"  Text: {quote.text[:100]}...")
         
-        print(f"\nResults saved to 'cisco_ai_output/' directory")
+        print(f"\nResults saved to 'example_output/' directory")
         
     except Exception as e:
         print(f"Error: {e}")
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     example_different_models()
     example_language_detection()
     example_animated_quotes()
-    example_cisco_ai_content()
+    example_example_content()
     
     print("\n" + "=" * 50)
     print("Examples completed!")
@@ -252,7 +252,7 @@ if __name__ == "__main__":
     print("4. Or use the command line interface for batch processing")
     print("\nAnimated Quote Detection Features:")
     print("- Detects voice inflection indicating excitement")
-    print("- Classifies content into Cisco AI topic categories")
+    print("- Classifies content into enterprise topic categories")
     print("- Returns exactly 10 quotes with even topic distribution")
     print("- Each quote is exactly 15 seconds long")
     print("- Provides timestamps and animatedness scores")

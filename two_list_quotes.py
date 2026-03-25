@@ -66,14 +66,14 @@ class TwoListQuoteDetector:
                     'already', 'implemented', 'deployed', 'in production', 'live',
                     'ai technology', 'artificial intelligence', 'machine learning',
                     'deep learning', 'neural networks', 'algorithms', 'models',
-                    'cisco is', 'we have', 'we are', 'our current'
+                    'we currently', 'we have', 'we are', 'our current'
                 ],
                 'patterns': [
                     r'we (currently|now|today)',
                     r'(current|existing|present) (state|technology|capabilities)',
                     r'(already|already have|already using)',
                     r'(in production|live|deployed)',
-                    r'cisco (is|has|currently)'
+                    r'(company|organization) (is|has|currently)'
                 ]
             },
             'future_direction': {
@@ -82,14 +82,14 @@ class TwoListQuoteDetector:
                     'planning', 'ahead', 'tomorrow', 'will be', 'going to',
                     'evolution', 'transformation', 'innovation', 'breakthrough',
                     'next generation', 'emerging', 'upcoming', 'forthcoming',
-                    'we are going', 'we will', 'cisco will', 'the future of'
+                    'we are going', 'we will', 'we will', 'the future of'
                 ],
                 'patterns': [
                     r'(future|next|coming) (generation|version|release)',
                     r'(roadmap|vision|strategy) (for|of)',
                     r'(will be|going to|planning to)',
                     r'(next|upcoming|forthcoming) (year|quarter|phase)',
-                    r'cisco (will|is going to|plans to)'
+                    r'(company|organization) (will|is going to|plans to)'
                 ]
             },
             'products': {
@@ -98,14 +98,14 @@ class TwoListQuoteDetector:
                     'on the truck', 'pipeline', 'development', 'building',
                     'creating', 'launching', 'releasing', 'shipping',
                     'delivering', 'rollout', 'deployment', 'availability',
-                    'cisco product', 'our product', 'cisco solution', 'our solution'
+                    'our product', 'our product', 'our solution', 'our solution'
                 ],
                 'patterns': [
                     r'(on the truck|in the pipeline)',
                     r'(product|solution|platform) (development|launch)',
                     r'(building|creating|developing) (new|next)',
                     r'(launching|releasing|shipping) (soon|next)',
-                    r'cisco (product|solution|platform)'
+                    r'(our|the) (product|solution|platform)'
                 ]
             }
         }

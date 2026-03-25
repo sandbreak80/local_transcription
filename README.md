@@ -2,9 +2,7 @@
 
 A powerful, privacy-focused tool for transcribing audio and video files locally using OpenAI's Whisper model. No data is sent to external servers - everything runs on your machine.
 
-**Author:** Brad Stoner (bmstoner@cisco.com)  
-**Created for:** Splunk and Cisco  
-**Version:** 1.2.0
+**Version:** 2.0.0
 
 ---
 
@@ -51,7 +49,7 @@ Then open: **http://localhost:5731**
 - 📝 **Multiple Outputs**: Text files and detailed JSON with timestamps
 - 🎭 **Animated Quote Detection**: Find the most exciting quotes with voice inflection analysis
 - 📋 **Two-List Quote Detection**: Generate two distinct lists - arbitrary quotes and animated quotes with topic mix
-- 🏷️ **Topic Classification**: Automatically categorize content (Cisco AI topics)
+- 🏷️ **Topic Classification**: Automatically categorize content (enterprise topics)
 - 🎤 **AI Speaker Detection**: Local voice-based speaker identification (no cloud/account needed!)
 - 👥 **Custom Speaker Names**: Assign names to detected speakers automatically
 - ⏱️ **Precise Timestamps**: Exact 15-second quote segments with timestamps
@@ -275,7 +273,7 @@ python transcribe.py long_video.mp4 --model tiny
 ### Animated Quote Detection
 ```bash
 # Find the most exciting 15-second quotes
-python transcribe.py cisco_presentation.mp4 --animated-quotes
+python transcribe.py example_presentation.mp4 --animated-quotes
 
 # Customize quote detection
 python transcribe.py interview.mp3 --animated-quotes --quote-duration 20 --num-quotes 15
@@ -313,7 +311,7 @@ python transcribe.py video.mp4 --two-lists --list1-count 8 --list2-count 10
 
 ## Animated Quote Detection
 
-The animated quote detection feature analyzes voice inflection to find the most exciting and engaging quotes from your content. It's specifically designed for Cisco AI content but works with any audio/video material.
+The animated quote detection feature analyzes voice inflection to find the most exciting and engaging quotes from your content. It's specifically designed for enterprise content but works with any audio/video material.
 
 ### How It Works
 
@@ -331,7 +329,7 @@ The animated quote detection feature analyzes voice inflection to find the most 
    - **Range**: 0.0 (monotone) to 1.0 (highly animated)
 
 3. **Topic Classification**: Automatically categorizes content into:
-   - **Current State**: Where Cisco currently is with AI technology
+   - **Current State**: Where enterprise currently is with AI technology
    - **Future Direction**: Where we are going
    - **Product Pipeline**: What is "on the truck" product-wise
 
@@ -353,7 +351,7 @@ Animated Quotes (10 found):
 
 2. [00:03:42.500 - 00:03:57.500] (future_direction)
    Excitement Score: 0.823 (High Excitement)
-   Text: "The future of AI at Cisco is going to revolutionize how we think about..."
+   Text: "The future of AI at enterprise is going to revolutionize how we think about..."
 
 3. [00:05:10.000 - 00:05:25.000] (product_pipeline)
    Excitement Score: 0.801 (High Excitement)

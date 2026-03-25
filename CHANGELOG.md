@@ -111,8 +111,8 @@ This is a major feature release adding a complete web-based user interface!
 ## [1.0.1] - 2024-11-10
 
 ### Changed
-- Added author attribution (Brad Stoner, bmstoner@cisco.com)
-- Added organization information (Created for Splunk and Cisco)
+- Added author attribution (, )
+- Added organization information ()
 - Updated documentation with version and author information at top of README
 - Enhanced HOW_TO_USE_THE_ZIP.md with production testing section prominently displayed
 - Updated VERSION_INFO.txt with complete author and organization details
@@ -210,7 +210,7 @@ This is a major feature release adding a complete web-based user interface!
 ### Added
 - Animated quote detection feature
 - Voice inflection analysis
-- Topic classification (Cisco AI focused)
+- Topic classification (enterprise focused)
 - Excitement scoring system
 
 ### Changed

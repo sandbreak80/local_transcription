@@ -31,7 +31,7 @@ class AnimatedQuote:
 class AnimatedQuoteDetector:
     """
     Detects animated quotes from audio/video content based on voice inflection
-    and topic classification for Cisco AI content.
+    and topic classification for enterprise content.
     """
     
     def __init__(self, quote_duration: float = 15.0, num_quotes: int = 10):
@@ -45,7 +45,7 @@ class AnimatedQuoteDetector:
         self.quote_duration = quote_duration
         self.num_quotes = num_quotes
         
-        # Topic categories for Cisco AI content
+        # Topic categories for content classification
         self.topic_categories = {
             'current_state': {
                 'keywords': [

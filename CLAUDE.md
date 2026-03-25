@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Local media transcription tool using OpenAI's Whisper model. All processing runs locally (no external APIs). Built for Cisco/Splunk by Brad Stoner. Version 1.2.0.
+Local media transcription tool using OpenAI's Whisper model. All processing runs locally (no external APIs). Version 2.0.0.
 
 Two interfaces: CLI (`transcribe.py`) and web UI (`app.py` via Flask on port 5731).
 
@@ -46,7 +46,7 @@ There is no automated test suite, linter, or CI pipeline configured.
 
 ### Feature Modules
 
-- **`animated_quotes.py`** - `AnimatedQuoteDetector`: analyzes voice inflection using librosa prosody features (RMS, spectral centroid, ZCR, MFCC, pitch). Classifies into 3 Cisco-specific topic categories (current_state, future_direction, product_pipeline) via keyword/pattern matching. Selects top quotes with 3/3/4 topic distribution.
+- **`animated_quotes.py`** - `AnimatedQuoteDetector`: analyzes voice inflection using librosa prosody features (RMS, spectral centroid, ZCR, MFCC, pitch). Classifies into 3 enterprise topic categories (current_state, future_direction, product_pipeline) via keyword/pattern matching. Selects top quotes with 3/3/4 topic distribution.
 
 - **`two_list_quotes.py`** - `TwoListQuoteDetector`: produces List 1 (arbitrary 15s quotes, evenly distributed) and List 2 (animated quotes with 30% topic mix per category).
 
@@ -63,4 +63,4 @@ There is no automated test suite, linter, or CI pipeline configured.
 - Speaker detection has a graceful fallback chain: speechbrain -> librosa feature clustering -> basic silence-gap detection
 - Audio is always converted to 16kHz mono WAV before processing
 - The web app shells out to `transcribe.py` rather than importing it as a library
-- Topic classification is hardcoded for Cisco AI content categories
+- Topic classification is hardcoded for enterprise content categories

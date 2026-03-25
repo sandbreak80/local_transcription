@@ -99,7 +99,7 @@ def test_topic_classification():
     # Test sentences for each topic
     test_sentences = [
         "We currently have AI technology deployed in production across our network infrastructure.",
-        "The future of AI at Cisco will revolutionize how we approach network management.",
+        "The future of AI at enterprise will revolutionize how we approach network management.",
         "We have several new AI products coming on the truck next quarter that will change everything.",
         "Our existing machine learning models are already showing incredible results.",
         "The roadmap for next year includes breakthrough innovations in artificial intelligence.",

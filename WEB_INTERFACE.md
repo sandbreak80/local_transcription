@@ -2,8 +2,8 @@
 
 The Local Transcription Tool now includes a beautiful, user-friendly web interface! Perfect for non-technical users or anyone who prefers a visual interface over command-line tools.
 
-**Author:** Brad Stoner (bmstoner@cisco.com)  
-**Created for:** Splunk and Cisco  
+**Author:**   
+**Created for:**   
 **Version:** 1.1.0+
 
 ---
@@ -343,5 +343,5 @@ The web interface makes transcription accessible to everyone - no technical skil
 - 🎙️ Podcasters
 - 👨‍👩‍👧‍👦 Anyone who prefers visual tools
 
-**Made with ❤️ by Brad Stoner for Splunk and Cisco**
+**Made with care
 
