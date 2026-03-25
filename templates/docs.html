@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - Local Transcription Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .docs-nav { display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; }
+        .docs-nav a { padding: 8px 16px; background: #f0f2ff; border-radius: 20px; color: #667eea; text-decoration: none; font-weight: 600; font-size: 0.9em; }
+        .docs-nav a:hover { background: #667eea; color: white; }
+        .endpoint { background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+        .endpoint h3 { margin: 0 0 8px 0; font-size: 1.1em; }
+        .method { display: inline-block; padding: 3px 10px; border-radius: 4px; font-weight: 700; font-size: 0.85em; margin-right: 8px; font-family: monospace; }
+        .method-get { background: #d1e7dd; color: #0f5132; }
+        .method-post { background: #cfe2ff; color: #084298; }
+        .method-delete { background: #f8d7da; color: #842029; }
+        .path { font-family: monospace; font-size: 1em; color: #333; }
+        .endpoint p { color: #666; margin: 8px 0; font-size: 0.95em; }
+        .params { margin: 12px 0 0 0; }
+        .params table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        .params th { text-align: left; padding: 8px; background: #e9ecef; border-radius: 4px; }
+        .params td { padding: 8px; border-bottom: 1px solid #e9ecef; }
+        .params code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+        pre { background: #2d2d2d; color: #f8f8f2; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85em; line-height: 1.5; margin: 12px 0; }
+        .section-title { color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 8px; margin: 30px 0 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>API Documentation</h1>
+            <p class="tagline">Local Transcription Tool — REST API v1</p>
+        </header>
+
+        <main>
+            <div class="docs-nav">
+                <a href="#overview">Overview</a>
+                <a href="#jobs">Jobs</a>
+                <a href="#chunked">Chunked Upload</a>
+                <a href="#health">Health</a>
+                <a href="#examples">Examples</a>
+                <a href="/">Back to App</a>
+            </div>
+
+            <section id="overview">
+                <h2 class="section-title">Overview</h2>
+                <p>Base URL: <code>https://transcript.fluximetry.com/api/v1</code></p>
+                <p>All responses are JSON. Errors return <code>{"error": "message"}</code> with appropriate HTTP status codes.</p>
+                <p>Rate limits: 5 requests/second, 30 uploads/minute per IP. Health endpoint is exempt.</p>
+            </section>
+
+            <section id="jobs">
+                <h2 class="section-title">Jobs</h2>
+
+                <div class="endpoint">
+                    <h3><span class="method method-post">POST</span> <span class="path">/api/v1/jobs</span></h3>
+                    <p>Upload file(s) and start transcription. For files over 50MB, use chunked upload instead.</p>
+                    <div class="params">
+                        <table>
+                            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                            <tr><td><code>files</code></td><td>file</td><td>Yes</td><td>One or more audio/video files (multipart)</td></tr>
+                            <tr><td><code>model</code></td><td>string</td><td>No</td><td>tiny, base, small, medium, large (default: base)</td></tr>
+                            <tr><td><code>language</code></td><td>string</td><td>No</td><td>Language code or "auto" (default: auto)</td></tr>
+                            <tr><td><code>animated_quotes</code></td><td>string</td><td>No</td><td>"true" to enable voice inflection analysis</td></tr>
+                            <tr><td><code>two_list_quotes</code></td><td>string</td><td>No</td><td>"true" to enable two-list quote detection</td></tr>
+                            <tr><td><code>speaker_diarization</code></td><td>string</td><td>No</td><td>"true" to enable speaker detection</td></tr>
+                            <tr><td><code>num_speakers</code></td><td>integer</td><td>No</td><td>Expected speakers, 1-20 (auto-detect if omitted)</td></tr>
+                            <tr><td><code>speaker_names</code></td><td>string</td><td>No</td><td>Comma-separated names (e.g., "Alice,Bob")</td></tr>
+                        </table>
+                    </div>
+<pre>{
+  "success": true,
+  "jobs": [{"job_id": "uuid", "filename": "meeting.mp4"}]
+}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <h3><span class="method method-get">GET</span> <span class="path">/api/v1/jobs</span></h3>
+                    <p>List all jobs. Filter with <code>?status=queued|processing|completed|failed</code></p>
+<pre>{
+  "jobs": [{"id": "uuid", "status": "completed", "filename": "...", ...}]
+}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <h3><span class="method method-get">GET</span> <span class="path">/api/v1/jobs/{id}</span></h3>
+                    <p>Get details for a specific job including output files.</p>
+<pre>{
+  "id": "uuid", "filename": "meeting.mp4", "status": "completed",
+  "progress": 100, "model": "base", "language": "en",
+  "output_files": [{"name": "meeting_transcription.txt", "size": 4096}],
+  "created_at": "...", "completed_at": "..."
+}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <h3><span class="method method-delete">DELETE</span> <span class="path">/api/v1/jobs/{id}</span></h3>
+                    <p>Cancel a queued/processing job or delete a completed/failed job. Kills subprocess if running. Cleans up all files.</p>
+<pre>{"success": true, "message": "Job uuid deleted"}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <h3><span class="method method-get">GET</span> <span class="path">/api/v1/jobs/{id}/files/{filename}</span></h3>
+                    <p>Download an output file from a completed job.</p>
+                    <p>Returns the file content with <code>Content-Disposition: attachment</code>.</p>
+                </div>
+            </section>
+
+            <section id="chunked">
+                <h2 class="section-title">Chunked Upload</h2>
+                <p>For files over 50MB (required behind Cloudflare Tunnels with 100MB limit).</p>
+
+                <div class="endpoint">
+                    <h3><span class="method method-post">POST</span> <span class="path">/api/v1/uploads</span></h3>
+                    <p>Initiate a chunked upload session. Send JSON body.</p>
+                    <div class="params">
+                        <table>
+                            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                            <tr><td><code>filename</code></td><td>string</td><td>Yes</td><td>Original filename</td></tr>
+                            <tr><td><code>total_chunks</code></td><td>integer</td><td>Yes</td><td>Total number of chunks (1-200)</td></tr>
+                            <tr><td colspan="4">Plus all transcription options (model, language, etc.)</td></tr>
+                        </table>
+                    </div>
+<pre>{"upload_id": "uuid", "filename": "large_file.mp4", "total_chunks": 7, "chunk_size_mb": 50}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <h3><span class="method method-post">POST</span> <span class="path">/api/v1/uploads/{id}/chunks</span></h3>
+                    <p>Upload a single chunk (multipart form). Rate limit exempt for streaming.</p>
+                    <div class="params">
+                        <table>
+                            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                            <tr><td><code>chunk</code></td><td>file</td><td>Yes</td><td>Chunk data (max 50MB)</td></tr>
+                            <tr><td><code>chunk_index</code></td><td>integer</td><td>Yes</td><td>0-based chunk index</td></tr>
+                        </table>
+                    </div>
+<pre>{"upload_id": "uuid", "chunk_index": 0, "received": 1, "total_chunks": 7, "complete": false}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <h3><span class="method method-post">POST</span> <span class="path">/api/v1/uploads/{id}/complete</span></h3>
+                    <p>Finalize upload: reassemble chunks and start transcription job.</p>
+<pre>{"success": true, "job_id": "uuid", "filename": "large_file.mp4", "file_size_mb": 300.0}</pre>
+                </div>
+            </section>
+
+            <section id="health">
+                <h2 class="section-title">Health</h2>
+
+                <div class="endpoint">
+                    <h3><span class="method method-get">GET</span> <span class="path">/api/v1/health</span></h3>
+                    <p>Health check with queue stats, GPU info, and supported formats. Rate limit exempt.</p>
+<pre>{
+  "status": "healthy",
+  "gpu": {"available": true, "device": "NVIDIA GeForce RTX 4070"},
+  "queue_size": 0, "processing": 0, "completed": 12,
+  "supported_formats": ["aac","avi","flac","mp3","mp4","wav",...],
+  "supported_models": ["base","large","medium","small","tiny"],
+  "chunk_size_mb": 50, "max_request_mb": 55
+}</pre>
+                </div>
+            </section>
+
+            <section id="examples">
+                <h2 class="section-title">Examples</h2>
+
+                <h3>Simple upload</h3>
+<pre>curl -X POST https://transcript.fluximetry.com/api/v1/jobs \
+  -F "files=@meeting.mp4" \
+  -F "model=medium" \
+  -F "language=en"</pre>
+
+                <h3>Check job status</h3>
+<pre>curl https://transcript.fluximetry.com/api/v1/jobs/{job_id}</pre>
+
+                <h3>Download result</h3>
+<pre>curl -O https://transcript.fluximetry.com/api/v1/jobs/{job_id}/files/meeting_transcription.txt</pre>
+
+                <h3>Chunked upload (large files)</h3>
+<pre># 1. Initiate
+curl -X POST https://transcript.fluximetry.com/api/v1/uploads \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"large.mp4","total_chunks":6,"model":"base"}'
+
+# 2. Upload chunks (repeat for each)
+curl -X POST https://transcript.fluximetry.com/api/v1/uploads/{upload_id}/chunks \
+  -F "chunk=@chunk_0" -F "chunk_index=0"
+
+# 3. Finalize
+curl -X POST https://transcript.fluximetry.com/api/v1/uploads/{upload_id}/complete</pre>
+
+                <h3>Cancel a job</h3>
+<pre>curl -X DELETE https://transcript.fluximetry.com/api/v1/jobs/{job_id}</pre>
+            </section>
+        </main>
+
+        <footer>
+            <p>v2.0.0 | <a href="/docs">API Docs</a> | <a href="https://github.com/sandbreak80/local_transcription" target="_blank">GitHub</a></p>
+        </footer>
+    </div>
+</body>
+</html>

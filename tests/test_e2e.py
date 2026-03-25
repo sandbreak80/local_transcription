@@ -243,17 +243,17 @@ class TestJobLifecycle(unittest.TestCase):
 
         # Verify output files exist
         self.assertGreater(len(job['output_files']), 0)
-        has_txt = any(f['name'].endswith('.txt') for f in job['output_files'])
+        has_txt = any(f['name'].endswith('.vtt') for f in job['output_files'])
         has_json = any(f['name'].endswith('.json') for f in job['output_files'])
-        self.assertTrue(has_txt, "Missing .txt output")
+        self.assertTrue(has_txt, "Missing .vtt output")
         self.assertTrue(has_json, "Missing .json output")
 
         # Download .txt
-        txt_name = [f['name'] for f in job['output_files'] if f['name'].endswith('.txt')][0]
+        txt_name = [f['name'] for f in job['output_files'] if f['name'].endswith('.vtt')][0]
         rate_limit()
         r = requests.get(f"{API}/jobs/{job_id}/files/{txt_name}")
         self.assertEqual(r.status_code, 200)
-        self.assertIn('Transcription of:', r.text)
+        self.assertIn('WEBVTT', r.text)
 
         # Download .json
         json_name = [f['name'] for f in job['output_files'] if f['name'].endswith('.json')][0]

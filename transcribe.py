@@ -314,37 +314,52 @@ class MediaTranscriber:
     
     def save_transcription(self, result, output_dir=None):
         """
-        Save transcription result to file.
-        
+        Save transcription result as WebVTT (.vtt) and JSON.
+
         Args:
             result (dict): Transcription result
             output_dir (str): Output directory (optional)
         """
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-        
+
         file_path = Path(result['file_path'])
-        
+
         # Create output filename
         if output_dir:
-            output_path = Path(output_dir) / f"{file_path.stem}_transcription.txt"
+            vtt_path = Path(output_dir) / f"{file_path.stem}.vtt"
         else:
-            output_path = file_path.parent / f"{file_path.stem}_transcription.txt"
-        
-        # Save as text file with sentence-level timestamps
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(f"Transcription of: {file_path.name}\n")
-            f.write(f"Language: {result.get('language', 'unknown')}\n")
-            f.write(f"Timestamp: {result.get('timestamp', '')}\n")
-            f.write("-" * 50 + "\n\n")
-            
-            # Format with sentence-level timestamps
-            formatted_text = self._format_transcript_with_timestamps(result.get('segments', []))
-            f.write(formatted_text)
-        
-        # Save detailed JSON (always, so /scan-outputs can find paired .txt/.json)
-        json_path = output_path.with_suffix('.json')
-        # Convert any Path objects to strings for JSON serialization
+            vtt_path = file_path.parent / f"{file_path.stem}.vtt"
+
+        # Save as WebVTT
+        segments = result.get('segments', [])
+        with open(vtt_path, 'w', encoding='utf-8') as f:
+            f.write("WEBVTT\n")
+            f.write(f"NOTE Transcription of {file_path.name}\n")
+            f.write(f"NOTE Language: {result.get('language', 'unknown')}\n\n")
+
+            for i, segment in enumerate(segments):
+                start = segment.get('start', 0)
+                end = segment.get('end', 0)
+                text = segment.get('text', '').strip()
+                speaker_id = segment.get('speaker_id') or segment.get('speaker')
+
+                if not text:
+                    continue
+
+                start_ts = self._format_vtt_timestamp(start)
+                end_ts = self._format_vtt_timestamp(end)
+
+                f.write(f"{i + 1}\n")
+                f.write(f"{start_ts} --> {end_ts}\n")
+                if speaker_id:
+                    f.write(f"<v {speaker_id}>{text}\n")
+                else:
+                    f.write(f"{text}\n")
+                f.write("\n")
+
+        # Save detailed JSON
+        json_path = vtt_path.with_suffix('.json')
         json_result = {
             'text': result['text'],
             'language': result.get('language', 'unknown'),
@@ -354,8 +369,8 @@ class MediaTranscriber:
         }
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(json_result, f, indent=2, ensure_ascii=False)
-        
-        click.echo(f"Transcription saved: {output_path}")
+
+        click.echo(f"Transcription saved: {vtt_path}")
     
     def _format_transcript_with_timestamps(self, segments):
         """
@@ -488,7 +503,14 @@ class MediaTranscriber:
         secs = seconds % 60
         
         return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
-    
+
+    def _format_vtt_timestamp(self, seconds):
+        """Format timestamp in WebVTT format: HH:MM:SS.mmm"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = seconds % 60
+        return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
+
     def detect_animated_quotes(self, file_path, quote_duration=15.0, num_quotes=10):
         """
         Detect animated quotes from a media file.

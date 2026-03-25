@@ -375,7 +375,7 @@ def process_job(job_id):
             uuid_filename = Path(input_file).name
             output_files = []
 
-            for ext in ['_transcription.txt', '_transcription.json',
+            for ext in ['.vtt', '.json',
                         '_animated_quotes.txt', '_animated_quotes.json',
                         '_two_list_quotes.txt', '_two_list_quotes.json']:
                 actual_file = os.path.join(output_dir, uuid_base_name + ext)
@@ -855,6 +855,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/docs')
+def docs():
+    return render_template('docs.html')
+
+
 @app.route('/upload', methods=['POST'])
 def legacy_upload():
     resp, code = _handle_upload(request)
@@ -896,8 +901,8 @@ def legacy_download(job_id, filename):
 def legacy_scan_outputs():
     output_dir = app.config['OUTPUT_FOLDER']
     files_found = []
-    for file_path in Path(output_dir).glob('*_transcription.txt'):
-        base_name = file_path.stem.replace('_transcription', '')
+    for file_path in Path(output_dir).glob('*.vtt'):
+        base_name = file_path.stem
         json_file = file_path.with_suffix('.json')
         if not json_file.exists():
             continue
@@ -908,8 +913,8 @@ def legacy_scan_outputs():
             continue
         job_id = str(uuid.uuid4())
         output_files = []
-        for ext in ['.txt', '.json']:
-            f = file_path.parent / f"{base_name}_transcription{ext}"
+        for ext in ['.vtt', '.json']:
+            f = file_path.parent / f"{base_name}{ext}"
             if f.exists():
                 output_files.append({
                     'name': f.name, 'path': str(f), 'size': f.stat().st_size
