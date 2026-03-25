@@ -808,25 +808,33 @@ def api_complete_chunked_upload(upload_id):
     })
 
 
+_gpu_cache = {'info': None, 'checked_at': 0}
+
+
 @app.route('/api/v1/health', methods=['GET'])
 @limiter.exempt
 def api_health():
     """Health check with queue stats and GPU info."""
-    # GPU check
-    gpu_info = None
-    try:
-        result = subprocess.run(
-            ['python3', '-c',
-             'import torch; print(torch.cuda.is_available()); '
-             'print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")'],
-            capture_output=True, text=True, timeout=10)
-        lines = result.stdout.strip().split('\n')
-        if len(lines) >= 1:
-            gpu_available = lines[0].strip() == 'True'
-            gpu_name = lines[1].strip() if len(lines) > 1 else ''
-            gpu_info = {'available': gpu_available, 'device': gpu_name}
-    except Exception:
-        gpu_info = {'available': False, 'device': ''}
+    # GPU check — cached for 60 seconds (subprocess is slow)
+    now = time.time()
+    if _gpu_cache['info'] is None or now - _gpu_cache['checked_at'] > 60:
+        try:
+            result = subprocess.run(
+                ['python3', '-c',
+                 'import torch; print(torch.cuda.is_available()); '
+                 'print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")'],
+                capture_output=True, text=True, timeout=10)
+            lines = result.stdout.strip().split('\n')
+            if len(lines) >= 1:
+                gpu_available = lines[0].strip() == 'True'
+                gpu_name = lines[1].strip() if len(lines) > 1 else ''
+                _gpu_cache['info'] = {'available': gpu_available, 'device': gpu_name}
+            else:
+                _gpu_cache['info'] = {'available': False, 'device': ''}
+        except Exception:
+            _gpu_cache['info'] = {'available': False, 'device': ''}
+        _gpu_cache['checked_at'] = now
+    gpu_info = _gpu_cache['info']
 
     all_jobs = db_list_jobs()
     return jsonify({
