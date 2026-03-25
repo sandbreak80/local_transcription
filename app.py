@@ -860,6 +860,226 @@ def docs():
     return render_template('docs.html')
 
 
+@app.route('/openapi.json')
+@limiter.exempt
+def openapi_spec():
+    """Serve the OpenAPI 3.0 specification."""
+    spec = {
+        "openapi": "3.0.3",
+        "info": {
+            "title": "Local Transcription Tool API",
+            "description": "AI-powered audio & video transcription with GPU acceleration, speaker detection, and animated quote extraction. All processing runs locally.",
+            "version": "2.0.0",
+            "contact": {"name": "Brad Stoner", "email": "bstoner@gmail.com"},
+            "license": {"name": "MIT"},
+        },
+        "servers": [
+            {"url": "https://transcript.fluximetry.com", "description": "Production"},
+            {"url": "http://localhost:5731", "description": "Local development"},
+        ],
+        "tags": [
+            {"name": "Jobs", "description": "Upload files and manage transcription jobs"},
+            {"name": "Chunked Upload", "description": "Upload large files in 50MB chunks (required behind Cloudflare Tunnels)"},
+            {"name": "Health", "description": "Server health and capabilities"},
+        ],
+        "paths": {
+            "/api/v1/jobs": {
+                "post": {
+                    "tags": ["Jobs"],
+                    "summary": "Upload file(s) and start transcription",
+                    "description": "Upload one or more audio/video files (max 50MB per request). For larger files, use the chunked upload endpoints.",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "multipart/form-data": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["files"],
+                                    "properties": {
+                                        "files": {"type": "string", "format": "binary", "description": "Audio/video file(s)"},
+                                        "model": {"type": "string", "enum": ["tiny", "base", "small", "medium", "large"], "default": "base", "description": "Whisper model size"},
+                                        "language": {"type": "string", "default": "auto", "description": "Language code (e.g., en, es, fr) or 'auto' for detection"},
+                                        "animated_quotes": {"type": "string", "enum": ["true", "false"], "default": "false", "description": "Enable voice inflection analysis"},
+                                        "two_list_quotes": {"type": "string", "enum": ["true", "false"], "default": "false", "description": "Enable two-list quote detection"},
+                                        "speaker_diarization": {"type": "string", "enum": ["true", "false"], "default": "false", "description": "Enable AI speaker detection"},
+                                        "num_speakers": {"type": "integer", "minimum": 1, "maximum": 20, "description": "Expected number of speakers (auto-detect if omitted)"},
+                                        "speaker_names": {"type": "string", "description": "Comma-separated speaker names (e.g., 'Alice,Bob')"},
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {"description": "Jobs created", "content": {"application/json": {"schema": {"type": "object", "properties": {"success": {"type": "boolean"}, "jobs": {"type": "array", "items": {"type": "object", "properties": {"job_id": {"type": "string"}, "filename": {"type": "string"}}}}}}}}},
+                        "400": {"description": "Validation error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+                        "429": {"description": "Rate limit exceeded"},
+                    },
+                },
+                "get": {
+                    "tags": ["Jobs"],
+                    "summary": "List all jobs",
+                    "parameters": [
+                        {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["queued", "processing", "completed", "failed"]}, "description": "Filter by status"},
+                    ],
+                    "responses": {
+                        "200": {"description": "Job list", "content": {"application/json": {"schema": {"type": "object", "properties": {"jobs": {"type": "array", "items": {"$ref": "#/components/schemas/Job"}}}}}}},
+                    },
+                },
+            },
+            "/api/v1/jobs/{job_id}": {
+                "get": {
+                    "tags": ["Jobs"],
+                    "summary": "Get job details",
+                    "parameters": [{"name": "job_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {
+                        "200": {"description": "Job details", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Job"}}}},
+                        "404": {"description": "Job not found"},
+                    },
+                },
+                "delete": {
+                    "tags": ["Jobs"],
+                    "summary": "Cancel or delete a job",
+                    "description": "Cancels a queued/processing job (kills subprocess if running) or deletes a completed/failed job. Cleans up all associated files.",
+                    "parameters": [{"name": "job_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {
+                        "200": {"description": "Job deleted"},
+                        "404": {"description": "Job not found"},
+                    },
+                },
+            },
+            "/api/v1/jobs/{job_id}/files/{filename}": {
+                "get": {
+                    "tags": ["Jobs"],
+                    "summary": "Download an output file",
+                    "description": "Download a .vtt (WebVTT) or .json output file from a completed job.",
+                    "parameters": [
+                        {"name": "job_id", "in": "path", "required": True, "schema": {"type": "string"}},
+                        {"name": "filename", "in": "path", "required": True, "schema": {"type": "string"}, "description": "e.g., meeting.vtt or meeting.json"},
+                    ],
+                    "responses": {
+                        "200": {"description": "File content"},
+                        "400": {"description": "Job not completed"},
+                        "404": {"description": "Job or file not found"},
+                    },
+                },
+            },
+            "/api/v1/uploads": {
+                "post": {
+                    "tags": ["Chunked Upload"],
+                    "summary": "Initiate chunked upload",
+                    "description": "Start a chunked upload session for files over 50MB. Returns an upload_id to use for subsequent chunk uploads.",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["filename", "total_chunks"],
+                                    "properties": {
+                                        "filename": {"type": "string", "description": "Original filename (e.g., 'meeting.mp4')"},
+                                        "total_chunks": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Total number of chunks"},
+                                        "total_size_mb": {"type": "number", "description": "Total file size in MB (informational)"},
+                                        "model": {"type": "string", "enum": ["tiny", "base", "small", "medium", "large"], "default": "base"},
+                                        "language": {"type": "string", "default": "auto"},
+                                        "animated_quotes": {"type": "string", "enum": ["true", "false"], "default": "false"},
+                                        "two_list_quotes": {"type": "string", "enum": ["true", "false"], "default": "false"},
+                                        "speaker_diarization": {"type": "string", "enum": ["true", "false"], "default": "false"},
+                                        "num_speakers": {"type": "integer", "minimum": 1, "maximum": 20},
+                                        "speaker_names": {"type": "string"},
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {
+                        "201": {"description": "Upload session created", "content": {"application/json": {"schema": {"type": "object", "properties": {"upload_id": {"type": "string"}, "filename": {"type": "string"}, "total_chunks": {"type": "integer"}, "chunk_size_mb": {"type": "integer"}}}}}},
+                        "400": {"description": "Validation error"},
+                    },
+                },
+            },
+            "/api/v1/uploads/{upload_id}/chunks": {
+                "post": {
+                    "tags": ["Chunked Upload"],
+                    "summary": "Upload a chunk",
+                    "description": "Upload a single chunk (max 50MB). Rate limit exempt for streaming.",
+                    "parameters": [{"name": "upload_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "multipart/form-data": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["chunk", "chunk_index"],
+                                    "properties": {
+                                        "chunk": {"type": "string", "format": "binary", "description": "Chunk data (max 50MB)"},
+                                        "chunk_index": {"type": "integer", "description": "0-based chunk index"},
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {"description": "Chunk received", "content": {"application/json": {"schema": {"type": "object", "properties": {"upload_id": {"type": "string"}, "chunk_index": {"type": "integer"}, "received": {"type": "integer"}, "total_chunks": {"type": "integer"}, "complete": {"type": "boolean"}}}}}},
+                        "400": {"description": "Invalid chunk"},
+                        "404": {"description": "Upload session not found"},
+                    },
+                },
+            },
+            "/api/v1/uploads/{upload_id}/complete": {
+                "post": {
+                    "tags": ["Chunked Upload"],
+                    "summary": "Finalize chunked upload",
+                    "description": "Reassemble all chunks and start the transcription job. Call after all chunks are uploaded.",
+                    "parameters": [{"name": "upload_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {
+                        "200": {"description": "Job created", "content": {"application/json": {"schema": {"type": "object", "properties": {"success": {"type": "boolean"}, "job_id": {"type": "string"}, "filename": {"type": "string"}, "file_size_mb": {"type": "number"}}}}}},
+                        "400": {"description": "Missing chunks"},
+                        "404": {"description": "Upload session not found"},
+                    },
+                },
+            },
+            "/api/v1/health": {
+                "get": {
+                    "tags": ["Health"],
+                    "summary": "Health check",
+                    "description": "Returns server status, GPU info, queue stats, and supported formats/models. Rate limit exempt.",
+                    "responses": {
+                        "200": {"description": "Health status", "content": {"application/json": {"schema": {"type": "object", "properties": {"status": {"type": "string"}, "gpu": {"type": "object", "properties": {"available": {"type": "boolean"}, "device": {"type": "string"}}}, "queue_size": {"type": "integer"}, "processing": {"type": "integer"}, "completed": {"type": "integer"}, "failed": {"type": "integer"}, "supported_formats": {"type": "array", "items": {"type": "string"}}, "supported_models": {"type": "array", "items": {"type": "string"}}, "chunk_size_mb": {"type": "integer"}, "max_request_mb": {"type": "integer"}}}}}},
+                    },
+                },
+            },
+        },
+        "components": {
+            "schemas": {
+                "Error": {
+                    "type": "object",
+                    "properties": {"error": {"type": "string"}},
+                },
+                "Job": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "Job UUID"},
+                        "filename": {"type": "string"},
+                        "status": {"type": "string", "enum": ["queued", "processing", "completed", "failed", "cancelled"]},
+                        "progress": {"type": "integer", "minimum": 0, "maximum": 100},
+                        "message": {"type": "string"},
+                        "model": {"type": "string"},
+                        "language": {"type": "string"},
+                        "animated_quotes": {"type": "boolean"},
+                        "two_list_quotes": {"type": "boolean"},
+                        "speaker_diarization": {"type": "boolean"},
+                        "file_size_mb": {"type": "number"},
+                        "created_at": {"type": "string", "format": "date-time"},
+                        "completed_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "output_files": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "size": {"type": "integer"}}}},
+                    },
+                },
+            },
+        },
+    }
+    return jsonify(spec)
+
+
 @app.route('/upload', methods=['POST'])
 def legacy_upload():
     resp, code = _handle_upload(request)
