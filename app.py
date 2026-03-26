@@ -883,7 +883,7 @@ def openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "Local Transcription Tool API",
-            "description": "AI-powered audio & video transcription with GPU acceleration, speaker detection, and animated quote extraction. All processing runs locally.",
+            "description": "AI-powered audio & video transcription using faster-whisper with GPU acceleration, batched inference, speaker detection, and animated quote extraction. Output in WebVTT format. All processing runs locally.",
             "version": "2.0.0",
             "contact": {"url": "https://github.com/sandbreak80/local_transcription"},
             "license": {"name": "MIT"},

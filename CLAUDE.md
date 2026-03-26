@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Local media transcription tool using OpenAI's Whisper model. All processing runs locally (no external APIs). Version 2.0.0.
+Local media transcription tool using faster-whisper (CTranslate2) with GPU acceleration. All processing runs locally (no external APIs). Version 2.0.0.
 
-Two interfaces: CLI (`transcribe.py`) and web UI (`app.py` via Flask on port 5731).
+Two interfaces: CLI (`transcribe.py`) and web UI + REST API (`app.py` via Flask on port 5731).
+
+Live at https://transcript.fluximetry.com/ — API docs at /docs, GitHub at https://github.com/sandbreak80/local_transcription
 
 ## Common Commands
 
@@ -23,44 +25,48 @@ python transcribe.py <file> --speaker-diarization --speaker-names "Alice,Bob"
 # Web interface
 python app.py                    # starts Flask on port 5731
 
-# Docker
-./transcribe.sh <file>           # CLI via Docker
-./transcribe-web.sh              # Web UI via Docker
+# Docker (with GPU)
 docker build -t local-transcription .
+docker run -d --gpus all -p 5731:5731 local-transcription python /app/app.py
 
-# Tests (manual, no test framework)
-python test_animated_quotes.py   # requires a test audio file
+# Tests
+python tests/test_e2e.py                    # 51 E2E tests against live API
+python tests/test_api_comprehensive.py      # 76 comprehensive API tests
 ```
-
-There is no automated test suite, linter, or CI pipeline configured.
 
 ## Architecture
 
 ### Core Pipeline
 
-`transcribe.py` is the main entry point (CLI via `click`). It contains `MediaTranscriber`, which:
+`transcribe.py` contains `MediaTranscriber`, which:
 1. Extracts audio to WAV via `ffmpeg-python`
-2. Transcribes with `whisper.load_model()` / `model.transcribe()`
+2. Transcribes with `faster-whisper` (CTranslate2 backend, batched inference, float16 GPU)
 3. Optionally runs animated quote detection, two-list quotes, or speaker diarization
-4. Saves output as `_transcription.txt` / `.json` (plus quote/speaker files)
+4. Saves output as WebVTT (`.vtt`) with merged speaker segments + JSON
+
+### API Layer
+
+`app.py` is a Flask app with:
+- REST API v1 at `/api/v1/` with full CRUD for jobs
+- Chunked upload support (50MB chunks) for Cloudflare Tunnel compatibility
+- SQLite persistence (WAL mode) — jobs survive restarts
+- Cached Whisper models in-process — no subprocess per job
+- 2 parallel worker threads (configurable via `MAX_CONCURRENT_JOBS`)
+- Per-job output directories for multi-user isolation
+- Rate limiting (5/sec general, 30/min uploads, health exempt)
+- Swagger UI API docs at `/docs` with OpenAPI 3.0 spec at `/openapi.json`
 
 ### Feature Modules
 
-- **`animated_quotes.py`** - `AnimatedQuoteDetector`: analyzes voice inflection using librosa prosody features (RMS, spectral centroid, ZCR, MFCC, pitch). Classifies into 3 enterprise topic categories (current_state, future_direction, product_pipeline) via keyword/pattern matching. Selects top quotes with 3/3/4 topic distribution.
-
-- **`two_list_quotes.py`** - `TwoListQuoteDetector`: produces List 1 (arbitrary 15s quotes, evenly distributed) and List 2 (animated quotes with 30% topic mix per category).
-
-- **`local_speaker_detection.py`** - `LocalSpeakerDetector`: speaker diarization using speechbrain ECAPA-TDNN embeddings with agglomerative clustering fallback to librosa MFCC features. No external accounts needed. Model stored in `models/speaker_recognition/`.
-
-- **`speaker_diarization.py`** - `SpeakerDiarizer`: alternative diarization via `pyannote.audio` (requires HuggingFace token). Not used by default; `local_speaker_detection.py` is preferred.
-
-### Web Interface
-
-`app.py` is a Flask app that wraps the CLI. It spawns `transcribe.py` as a subprocess, manages a job queue with a background worker thread, and stores state in an in-memory `jobs` dict. Uploaded files go to `/tmp/transcription_uploads`, outputs to `/tmp/transcription_outputs`. The web frontend is a single `templates/index.html` file.
+- **`animated_quotes.py`** — Voice inflection analysis using librosa prosody features. Topic classification with 3/3/4 distribution.
+- **`two_list_quotes.py`** — List 1 (arbitrary 15s quotes) + List 2 (animated quotes with topic mix).
+- **`local_speaker_detection.py`** — Speaker diarization via agglomerative clustering with silhouette score auto-detection. Fallback chain: speechbrain → librosa MFCC features → basic silence-gap detection.
 
 ### Key Design Patterns
 
-- Speaker detection has a graceful fallback chain: speechbrain -> librosa feature clustering -> basic silence-gap detection
-- Audio is always converted to 16kHz mono WAV before processing
-- The web app shells out to `transcribe.py` rather than importing it as a library
-- Topic classification is hardcoded for enterprise content categories
+- faster-whisper with `BatchedInferencePipeline` for 4-6x inference speedup
+- Model cache keeps Whisper models loaded between jobs (eliminates 1-13s reload)
+- Speaker count auto-detected via silhouette score (not hardcoded)
+- VTT output merges consecutive same-speaker segments into readable blocks
+- Chunked uploads split files into 50MB chunks for Cloudflare Tunnel (100MB limit)
+- Frontend uses `escapeHtml()` for XSS protection

@@ -1,8 +1,8 @@
 # Local Media Transcription Tool
 
-A powerful, privacy-focused tool for transcribing audio and video files locally using OpenAI's Whisper model. No data is sent to external servers - everything runs on your machine.
+A powerful, privacy-focused tool for transcribing audio and video files locally using faster-whisper (CTranslate2). GPU-accelerated with batched inference for up to 6x faster processing. No data is sent to external servers.
 
-**Version:** 2.0.0
+**Version:** 2.0.0 | **Live:** [transcript.fluximetry.com](https://transcript.fluximetry.com/) | **API Docs:** [/docs](https://transcript.fluximetry.com/docs) | **Output:** WebVTT (.vtt)
 
 ---
 
