@@ -26,6 +26,8 @@ import sqlite3
 import threading
 import signal
 import time
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_file, g
@@ -53,10 +55,36 @@ app.config['OUTPUT_FOLDER'] = os.environ.get('OUTPUT_FOLDER', '/tmp/transcriptio
 app.config['DB_PATH'] = os.environ.get('DB_PATH', '/tmp/transcription_jobs.db')
 app.config['MAX_CONCURRENT_JOBS'] = int(os.environ.get('MAX_CONCURRENT_JOBS', '2'))
 app.config['CHUNK_SIZE_MB'] = int(os.environ.get('CHUNK_SIZE_MB', '50'))
+app.config['LOG_DIR'] = os.environ.get('LOG_DIR', '/tmp/transcription_logs')
+app.config['DEBUG_FILES_DIR'] = os.environ.get('DEBUG_FILES_DIR', '/tmp/transcription_debug')
+app.config['DEBUG_FILES_KEEP'] = int(os.environ.get('DEBUG_FILES_KEEP', '10'))
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['CHUNKS_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+os.makedirs(app.config['LOG_DIR'], exist_ok=True)
+os.makedirs(app.config['DEBUG_FILES_DIR'], exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+log = logging.getLogger('transcription')
+log.setLevel(logging.DEBUG)
+
+# File handler — rotates at 10MB, keeps 5 files
+_log_file = os.path.join(app.config['LOG_DIR'], 'transcription.log')
+_file_handler = RotatingFileHandler(_log_file, maxBytes=10*1024*1024, backupCount=5)
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+log.addHandler(_file_handler)
+
+# Console handler
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)
+_console_handler.setFormatter(logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s', datefmt='%H:%M:%S'))
+log.addHandler(_console_handler)
 
 # ---------------------------------------------------------------------------
 # Allowed inputs
@@ -294,6 +322,34 @@ def _cleanup_input(input_file):
         pass
 
 
+def _retain_debug_copy(input_file, job_id, filename):
+    """Keep a copy of the last N uploaded files for debugging."""
+    try:
+        debug_dir = app.config['DEBUG_FILES_DIR']
+        keep = app.config['DEBUG_FILES_KEEP']
+
+        if not input_file or not os.path.exists(input_file):
+            return
+
+        # Copy file with timestamp prefix
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        debug_name = f"{ts}_{job_id[:8]}_{filename}"
+        debug_path = os.path.join(debug_dir, debug_name)
+        shutil.copy2(input_file, debug_path)
+        log.debug(f"Debug copy saved: {debug_name} ({os.path.getsize(debug_path)/1024/1024:.1f}MB)")
+
+        # Prune old files — keep only the most recent N
+        files = sorted(Path(debug_dir).iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)
+        for old_file in files[keep:]:
+            try:
+                old_file.unlink()
+                log.debug(f"Debug file pruned: {old_file.name}")
+            except OSError:
+                pass
+    except Exception as e:
+        log.warning(f"Failed to retain debug copy: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Model cache — keeps Whisper models loaded between jobs
 # ---------------------------------------------------------------------------
@@ -331,6 +387,16 @@ def process_job(job_id):
     output_dir = os.path.join(app.config['OUTPUT_FOLDER'], job_id)
     os.makedirs(output_dir, exist_ok=True)
 
+    job_start = time.time()
+    timings = {}
+
+    log.info(f"JOB START id={job_id[:8]} file={job['filename']} "
+             f"model={job.get('model','base')} size={job.get('file_size_mb',0)}MB "
+             f"lang={job.get('language','auto')} diarize={job.get('speaker_diarization',False)}")
+
+    # Retain a debug copy of the input file
+    _retain_debug_copy(input_file, job_id, job['filename'])
+
     try:
         db_update_job(job_id, status='processing', progress=10,
                       message='Loading model...')
@@ -341,7 +407,10 @@ def process_job(job_id):
             language = None
 
         # Get cached model
+        t0 = time.time()
         whisper_model = _get_model(model_name)
+        timings['model_load'] = time.time() - t0
+        log.debug(f"  [{job_id[:8]}] Model load: {timings['model_load']:.2f}s (cached={model_name in _model_cache})")
 
         db_update_job(job_id, progress=20, message='Transcribing audio...')
 
@@ -366,21 +435,31 @@ def process_job(job_id):
                 pass
 
         # Run transcription
+        t0 = time.time()
         if job.get('two_list_quotes'):
             result = transcriber.detect_two_list_quotes(input_file)
         elif job.get('animated_quotes'):
             result = transcriber.detect_animated_quotes(input_file)
         else:
             result = transcriber.transcribe_file(input_file, language=language)
+        timings['transcription'] = time.time() - t0
+        seg_count = len(result.get('segments', []))
+        log.info(f"  [{job_id[:8]}] Transcription: {timings['transcription']:.1f}s, "
+                 f"{seg_count} segments, lang={result.get('language','?')}")
 
         # Apply speaker diarization
         if job.get('speaker_diarization'):
+            t0 = time.time()
             if transcriber.speaker_diarizer:
                 result = transcriber.apply_speaker_diarization(
                     result, str(input_file), num_speakers, speaker_name_mapping)
             else:
                 result = transcriber.apply_basic_speaker_detection(
                     result, num_speakers, speaker_name_mapping)
+            timings['diarization'] = time.time() - t0
+            speakers = set(s.get('speaker_id', '') for s in result.get('segments', []))
+            log.info(f"  [{job_id[:8]}] Diarization: {timings['diarization']:.1f}s, "
+                     f"{len(speakers)} speaker(s)")
 
         db_update_job(job_id, progress=80, message='Saving output...')
 
@@ -429,17 +508,29 @@ def process_job(job_id):
                     'size': os.path.getsize(clean_path)
                 })
 
+        timings['total'] = time.time() - job_start
+        file_list = [f['name'] for f in output_files]
+
         db_update_job(job_id, status='completed', progress=100,
                       message='Transcription completed!',
                       output_files=json.dumps(output_files),
                       completed_at=datetime.now().isoformat())
         _cleanup_input(input_file)
 
+        log.info(f"JOB COMPLETE id={job_id[:8]} file={job['filename']} "
+                 f"total={timings['total']:.1f}s "
+                 f"transcribe={timings.get('transcription',0):.1f}s "
+                 f"diarize={timings.get('diarization',0):.1f}s "
+                 f"outputs={file_list}")
+
     except Exception as e:
+        timings['total'] = time.time() - job_start
+        log.error(f"JOB FAILED id={job_id[:8]} file={job['filename']} "
+                  f"after={timings['total']:.1f}s error={str(e)[:300]}",
+                  exc_info=True)
         db_update_job(job_id, status='failed', progress=0,
                       message=f'Error: {str(e)[:500]}',
                       error_detail=str(e)[:2000])
-        _cleanup_input(input_file)
         _cleanup_input(input_file)
 
 
@@ -453,10 +544,11 @@ def worker_thread(worker_id):
 
         try:
             if job_id:
-                print(f"[Worker {worker_id}] Processing job {job_id}")
+                log.debug(f"[Worker {worker_id}] Picking up job {job_id[:8]}")
                 process_job(job_id)
         except Exception as e:
-            print(f"[Worker {worker_id}] Error processing {job_id}: {e}")
+            log.error(f"[Worker {worker_id}] Unhandled error on job {job_id[:8]}: {e}",
+                      exc_info=True)
             try:
                 db_update_job(job_id, status='failed', progress=0,
                               message=f'Worker error: {str(e)[:200]}')
@@ -528,6 +620,9 @@ def _handle_upload(request):
         db_save_job(job_dict)
         job_queue.put(job_id)
 
+        log.info(f"UPLOAD id={job_id[:8]} file={filename} size={job_dict['file_size_mb']}MB "
+                 f"model={params['model']} ip={request.remote_addr}")
+
         uploaded_jobs.append({'job_id': job_id, 'filename': filename})
 
     if not uploaded_jobs:
@@ -541,6 +636,27 @@ def _handle_upload(request):
     if rejected_files:
         resp['rejected_files'] = rejected_files
     return resp, 200
+
+
+# ===========================================================================
+# Request logging
+# ===========================================================================
+
+@app.before_request
+def _log_request():
+    g._request_start = time.time()
+
+
+@app.after_request
+def _log_response(response):
+    if hasattr(g, '_request_start'):
+        duration = (time.time() - g._request_start) * 1000
+        # Skip static files and health checks from verbose logging
+        path = request.path
+        if not path.startswith('/static') and path != '/api/v1/health' and path != '/health':
+            log.debug(f"HTTP {request.method} {path} -> {response.status_code} "
+                      f"({duration:.0f}ms) ip={request.remote_addr}")
+    return response
 
 
 # ===========================================================================
@@ -608,6 +724,7 @@ def api_delete_job(job_id):
         shutil.rmtree(job_output_dir, ignore_errors=True)
 
     db_delete_job(job_id)
+    log.info(f"DELETE id={job_id[:8]} file={job['filename']} prev_status={job['status']} ip={request.remote_addr}")
     return jsonify({'success': True, 'message': f'Job {job_id} deleted'})
 
 
@@ -1223,8 +1340,11 @@ if __name__ == '__main__':
     print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     print(f"Output folder: {app.config['OUTPUT_FOLDER']}")
     print(f"Database:      {app.config['DB_PATH']}")
+    print(f"Log file:      {_log_file}")
+    print(f"Debug files:   {app.config['DEBUG_FILES_DIR']} (keep last {app.config['DEBUG_FILES_KEEP']})")
     print(f"Server:        http://0.0.0.0:{port}")
-    print(f"API docs:      http://0.0.0.0:{port}/api/v1/health")
+    print(f"API docs:      http://0.0.0.0:{port}/docs")
     print("=" * 70)
+    log.info("Server starting")
 
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
