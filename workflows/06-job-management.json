@@ -1,0 +1,89 @@
+{
+  "name": "06 - Job Management & Cleanup",
+  "nodes": [
+    {
+      "parameters": { "content": "## Job Management & Cleanup\n\nAutomatically cleans up old transcription jobs on a schedule.\nRuns every hour, finds completed and failed jobs older than 24 hours,\nand deletes them to free up server resources.\n\n**API Features Used:**\n- `GET /api/v1/jobs?status=completed` \u2014 list completed jobs\n- `GET /api/v1/jobs?status=failed` \u2014 list failed jobs\n- `DELETE /api/v1/jobs/{id}` \u2014 delete a job and its files\n\n**Job statuses:** queued, processing, completed, failed\n\n**Cleanup policy:**\n- Completed jobs older than 24 hours \u2014 deleted\n- Failed jobs older than 24 hours \u2014 deleted\n- Queued/processing jobs \u2014 never touched\n\n**Setup:** Set `TRANSCRIPTION_API_URL` env var or use default.", "color": 4, "width": 420, "height": 380 },
+      "id": "note-overview", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 50]
+    },
+    {
+      "parameters": { "content": "## Job Management API\n\n**List jobs by status:**\n```\nGET /api/v1/jobs?status=completed\nGET /api/v1/jobs?status=failed\nGET /api/v1/jobs?status=queued\nGET /api/v1/jobs?status=processing\n```\n\n**Delete a job:**\n```\nDELETE /api/v1/jobs/{job_id}\n```\nRemoves the job record and all associated files.\n\n**Job object fields:**\n- `job_id` \u2014 unique identifier\n- `status` \u2014 queued/processing/completed/failed\n- `created_at` \u2014 ISO timestamp\n- `completed_at` \u2014 ISO timestamp (if done)\n- `filename` \u2014 original upload name\n- `output_files` \u2014 list of result files", "color": 6, "width": 350, "height": 380 },
+      "id": "note-api", "name": "API Reference", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [650, 50]
+    },
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] } },
+      "id": "schedule", "name": "Every Hour", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs?status=completed",
+        "options": { "timeout": 10000 }
+      },
+      "id": "list-completed", "name": "List Completed Jobs", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 450],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs?status=failed",
+        "options": { "timeout": 10000 }
+      },
+      "id": "list-failed", "name": "List Failed Jobs", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 650],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine completed and failed jobs, filter to those older than 24 hours\nconst completed = $('List Completed Jobs').item.json.jobs || [];\nconst failed = $('List Failed Jobs').item.json.jobs || [];\nconst allJobs = [...completed, ...failed];\n\nconst cutoff = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago\nconst oldJobs = allJobs.filter(job => {\n  const created = new Date(job.created_at || job.completed_at || 0).getTime();\n  return created < cutoff;\n});\n\nif (oldJobs.length === 0) {\n  return [{ json: { action: 'none', message: 'No jobs older than 24 hours to clean up' } }];\n}\n\nreturn oldJobs.map(job => ({\n  json: {\n    job_id: job.job_id,\n    status: job.status,\n    created_at: job.created_at,\n    filename: job.filename\n  }\n}));"
+      },
+      "id": "filter-old", "name": "Filter Jobs Older Than 24h", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [700, 550]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            { "leftValue": "={{ $json.action }}", "rightValue": "none", "operator": { "type": "string", "operation": "notEquals" } }
+          ]
+        }
+      },
+      "id": "has-jobs", "name": "Jobs to Delete?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [950, 550]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.job_id }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "delete-job", "name": "Delete Old Job", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1200, 500],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "result", "value": "={{ 'Deleted job ' + $json.job_id + ' (status: ' + ($json.status || 'unknown') + ')' }}" }
+          ]
+        }, "options": {}
+      },
+      "id": "log-deleted", "name": "Log Deletion", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "result", "value": "No old jobs to clean up" }
+          ]
+        }, "options": {}
+      },
+      "id": "log-skip", "name": "Nothing to Clean", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 700]
+    }
+  ],
+  "connections": {
+    "Every Hour": { "main": [[{ "node": "List Completed Jobs", "type": "main", "index": 0 }, { "node": "List Failed Jobs", "type": "main", "index": 0 }]] },
+    "List Completed Jobs": { "main": [[{ "node": "Filter Jobs Older Than 24h", "type": "main", "index": 0 }]] },
+    "List Failed Jobs": { "main": [[{ "node": "Filter Jobs Older Than 24h", "type": "main", "index": 0 }]] },
+    "Filter Jobs Older Than 24h": { "main": [[{ "node": "Jobs to Delete?", "type": "main", "index": 0 }]] },
+    "Jobs to Delete?": { "main": [[{ "node": "Delete Old Job", "type": "main", "index": 0 }], [{ "node": "Nothing to Clean", "type": "main", "index": 0 }]] },
+    "Delete Old Job": { "main": [[{ "node": "Log Deletion", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "description": "Scheduled job cleanup workflow. Every hour, lists completed and failed transcription jobs, identifies those older than 24 hours, and deletes them to free server resources.", "templateCredsSetupCompleted": true },
+  "tags": [{ "name": "job-management" }, { "name": "cleanup" }, { "name": "maintenance" }]
+}

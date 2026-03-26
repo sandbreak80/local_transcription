@@ -2,7 +2,7 @@
   "name": "01 - Basic Transcription with Speaker Detection",
   "nodes": [
     {
-      "parameters": { "content": "## Basic Transcription with Speaker Detection\n\nDemonstrates the core transcription workflow:\n1. Upload an audio/video file\n2. Transcribe with Whisper (model: small, GPU-accelerated)\n3. Auto-detect speakers via ECAPA-TDNN neural embeddings\n4. Download WebVTT output with `<v SPEAKER_XX>` voice tags\n5. Download JSON with full segment data\n\n**API Features Used:**\n- `POST /api/v1/jobs` — upload & transcribe\n- `GET /api/v1/jobs/{id}` — poll status\n- `GET /api/v1/jobs/{id}/files/{name}` — download VTT & JSON\n- `speaker_diarization=true` — enable AI speaker detection\n- `speaker_names` — assign human names to detected speakers\n\n**Output:** WebVTT with speaker labels:\n```\n1\n00:00:00.000 --> 00:00:15.500\n<v Alice>Welcome everyone to today's meeting.\n```\n\n**Setup:** Set `TRANSCRIPTION_API_URL` env var or use default.", "color": 4, "width": 450, "height": 400 },
+      "parameters": { "content": "## Basic Transcription with Speaker Detection\n\nDemonstrates the core transcription workflow:\n1. Upload an audio/video file\n2. Transcribe with Whisper (model: small, GPU-accelerated)\n3. Auto-detect speakers via ECAPA-TDNN neural embeddings\n4. Download WebVTT output with `<v SPEAKER_XX>` voice tags\n5. Download JSON with full segment data\n\n**API Features Used:**\n- `POST /api/v1/jobs` \u2014 upload & transcribe\n- `GET /api/v1/jobs/{id}` \u2014 poll status\n- `GET /api/v1/jobs/{id}/files/{name}` \u2014 download VTT & JSON\n- `speaker_diarization=true` \u2014 enable AI speaker detection\n- `speaker_names` \u2014 assign human names to detected speakers\n\n**Output:** WebVTT with speaker labels:\n```\n1\n00:00:00.000 --> 00:00:15.500\n<v Alice>Welcome everyone to today's meeting.\n```\n\n**Setup:** Set `TRANSCRIPTION_API_URL` env var or use default.", "color": 4, "width": 450, "height": 400 },
       "id": "note-overview", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 50]
     },
     {
@@ -22,14 +22,14 @@
         "contentType": "multipart-form-data",
         "bodyParameters": {
           "parameters": [
+            { "parameterType": "formBinaryData", "name": "files", "inputDataFieldName": "data" },
             { "name": "model", "value": "small" },
             { "name": "language", "value": "auto" },
             { "name": "speaker_diarization", "value": "true" },
             { "name": "speaker_names", "value": "={{ $json.body?.speaker_names || '' }}" }
           ]
         },
-        "sendBinaryData": true,
-        "binaryPropertyName": "data",
+        "sendBinaryData": false,
         "options": { "timeout": 30000 }
       },
       "id": "upload", "name": "Upload & Start Transcription", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 500],
@@ -44,7 +44,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.jobId }}",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init Poll').item.json.jobId }}",
         "options": { "timeout": 10000 }
       },
       "id": "poll", "name": "Poll Job Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 500],
@@ -59,7 +59,13 @@
       "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 750]
     },
     {
-      "parameters": { "values": { "number": [{ "name": "pollCount", "value": "={{ ($json.pollCount || 0) + 1 }}" }], "string": [{ "name": "jobId", "value": "={{ $json.jobId || $('Init Poll').item.json.jobId }}" }] }, "options": {} },
+      "parameters": {
+        "values": {
+          "number": [{ "name": "pollCount", "value": "={{ ($('Increment').item?.json?.pollCount ?? $('Init Poll').item.json.pollCount ?? 0) + 1 }}" }],
+          "string": [{ "name": "jobId", "value": "={{ $('Init Poll').item.json.jobId }}" }]
+        },
+        "options": {}
+      },
       "id": "inc", "name": "Increment", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 750]
     },
     {

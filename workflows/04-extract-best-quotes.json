@@ -2,12 +2,12 @@
   "name": "04 - Extract Best Quotes from Podcast/Presentation",
   "nodes": [
     {
-      "parameters": { "content": "## Extract Best Quotes via Voice Inflection Analysis\n\nUses the animated quote detection feature to find the most\nexciting/passionate moments in audio by analyzing voice inflection.\n\n**API Features Used:**\n- `animated_quotes=true` — voice inflection analysis\n- Prosody features: energy, spectral centroid, pitch variation,\n  MFCC variance, zero crossing rate\n- Topic classification into 3 categories\n- Returns top 10 quotes with excitement scores (0.0-1.0)\n- Each quote is exactly 15 seconds with precise timestamps\n\n**Output files:**\n- `.vtt` — full WebVTT transcript\n- `.json` — full segments with timestamps\n- `_animated_quotes.txt` — top 10 quotes report\n- `_animated_quotes.json` — structured quote data\n\n**Use cases:**\n- Pull best soundbites from podcasts\n- Find highlight clips from presentations\n- Content curation for social media", "color": 4, "width": 430, "height": 450 },
+      "parameters": { "content": "## Extract Best Quotes via Voice Inflection Analysis\n\nUses the animated quote detection feature to find the most\nexciting/passionate moments in audio by analyzing voice inflection.\n\n**API Features Used:**\n- `animated_quotes=true` \u2014 voice inflection analysis\n- Prosody features: energy, spectral centroid, pitch variation,\n  MFCC variance, zero crossing rate\n- Topic classification into 3 categories\n- Returns top 10 quotes with excitement scores (0.0-1.0)\n- Each quote is exactly 15 seconds with precise timestamps\n\n**Topic categories** are tuned for enterprise/tech content:\n- `current_state` \u2014 how things work today\n- `future_direction` \u2014 roadmap and vision\n- `product_pipeline` \u2014 upcoming features and releases\n\n**Output files:**\n- `.vtt` \u2014 full WebVTT transcript\n- `.json` \u2014 full segments with timestamps\n- `_animated_quotes.txt` \u2014 top 10 quotes report\n- `_animated_quotes.json` \u2014 structured quote data\n\n**Use cases:**\n- Pull best soundbites from podcasts\n- Find highlight clips from presentations\n- Content curation for social media", "color": 4, "width": 430, "height": 500 },
       "id": "note", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 20]
     },
     {
       "parameters": { "httpMethod": "POST", "path": "extract-quotes", "responseMode": "responseNode", "options": {} },
-      "id": "webhook", "name": "Receive Podcast/Presentation", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 500]
+      "id": "webhook", "name": "Receive Podcast/Presentation", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 560]
     },
     {
       "parameters": {
@@ -17,26 +17,58 @@
         "contentType": "multipart-form-data",
         "bodyParameters": {
           "parameters": [
+            { "parameterType": "formBinaryData", "name": "files", "inputDataFieldName": "data" },
             { "name": "model", "value": "small" },
             { "name": "animated_quotes", "value": "true" },
             { "name": "speaker_diarization", "value": "true" }
           ]
         },
-        "sendBinaryData": true, "binaryPropertyName": "data",
+        "sendBinaryData": false,
         "options": { "timeout": 30000 }
       },
-      "id": "upload", "name": "Transcribe + Extract Quotes", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 500],
+      "id": "upload", "name": "Transcribe + Extract Quotes", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 560],
       "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 2000
     },
-    { "parameters": { "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.jobs?.[0]?.job_id || '' }}" }] }, "options": {} }, "id": "init", "name": "Init", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [700, 500] },
-    { "parameters": { "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.jobId }}", "options": { "timeout": 10000 } }, "id": "poll", "name": "Poll", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 500], "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 },
-    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }] } }, "id": "done", "name": "Done?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 500] },
-    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }] } }, "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 750] },
-    { "parameters": { "values": { "number": [{ "name": "pollCount", "value": "={{ ($json.pollCount || 0) + 1 }}" }], "string": [{ "name": "jobId", "value": "={{ $json.jobId || $('Init').item.json.jobId }}" }] }, "options": {} }, "id": "inc", "name": "Inc", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 750] },
-    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }] } }, "id": "limit", "name": "< 10min?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1700, 750] },
-    { "parameters": { "amount": 5, "unit": "seconds" }, "id": "wait", "name": "Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [1950, 700] },
     {
-      "parameters": { "content": "## Quote Results\n\nDownloads the animated quotes JSON which contains:\n- Quote text with timestamps\n- Excitement score (0.0 = monotone, 1.0 = highly animated)\n- Topic category (current_state / future_direction / product_pipeline)\n- 15-second clip boundaries for each quote", "color": 2, "width": 350, "height": 150 },
+      "parameters": { "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.jobs?.[0]?.job_id || '' }}" }] }, "options": {} },
+      "id": "init", "name": "Init", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [700, 560]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init').item.json.jobId }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "poll", "name": "Poll", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 560],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "done", "name": "Done?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 560]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 810]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [{ "name": "pollCount", "value": "={{ ($('Inc').item?.json?.pollCount ?? $('Init').item.json.pollCount ?? 0) + 1 }}" }],
+          "string": [{ "name": "jobId", "value": "={{ $('Init').item.json.jobId }}" }]
+        },
+        "options": {}
+      },
+      "id": "inc", "name": "Inc", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 810]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }] } },
+      "id": "limit", "name": "< 10min?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1700, 810]
+    },
+    {
+      "parameters": { "amount": 5, "unit": "seconds" },
+      "id": "wait", "name": "Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [1950, 760]
+    },
+    {
+      "parameters": { "content": "## Quote Results\n\nDownloads the animated quotes JSON which contains:\n- Quote text with timestamps\n- Excitement score (0.0 = monotone, 1.0 = highly animated)\n- Topic category (current_state / future_direction / product_pipeline)\n- 15-second clip boundaries for each quote\n\n**Note:** Topic categories are tuned for enterprise/tech content.\nFor other domains, the categories may need customization.", "color": 2, "width": 350, "height": 180 },
       "id": "note-results", "name": "Results Note", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [1450, 350]
     },
     {
@@ -44,14 +76,17 @@
         "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init').item.json.jobId }}/files/{{ $('Poll').item.json.output_files?.find(f => f.name.includes('animated_quotes') && f.name.endsWith('.json'))?.name || $('Poll').item.json.output_files?.find(f => f.name.endsWith('.json'))?.name || 'output.json' }}",
         "options": { "timeout": 30000 }
       },
-      "id": "dl-quotes", "name": "Download Quotes JSON", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1450, 500],
+      "id": "dl-quotes", "name": "Download Quotes JSON", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1450, 560],
       "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 1000
     },
     {
       "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'completed', quotes: $json.quotes || [], total_quotes: ($json.quotes || []).length, output_files: $('Poll').item.json.output_files }) }}" },
-      "id": "respond", "name": "Return Quotes", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1700, 500]
+      "id": "respond", "name": "Return Quotes", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1700, 560]
     },
-    { "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Quote extraction failed or timed out' }) }}", "options": { "responseCode": 500 } }, "id": "err", "name": "Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 900] }
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Quote extraction failed or timed out' }) }}", "options": { "responseCode": 500 } },
+      "id": "err", "name": "Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 960]
+    }
   ],
   "connections": {
     "Receive Podcast/Presentation": { "main": [[{ "node": "Transcribe + Extract Quotes", "type": "main", "index": 0 }]] },
@@ -66,6 +101,6 @@
     "Download Quotes JSON": { "main": [[{ "node": "Return Quotes", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" },
-  "meta": { "description": "Uses voice inflection analysis to extract the top 10 most excited/animated quotes from a podcast or presentation. Returns quotes with excitement scores, timestamps, and topic categories.", "templateCredsSetupCompleted": true },
+  "meta": { "description": "Uses voice inflection analysis to extract the top 10 most excited/animated quotes from a podcast or presentation. Returns quotes with excitement scores, timestamps, and topic categories tuned for enterprise/tech content.", "templateCredsSetupCompleted": true },
   "tags": [{ "name": "transcription" }, { "name": "animated-quotes" }, { "name": "podcast" }, { "name": "content-curation" }]
 }

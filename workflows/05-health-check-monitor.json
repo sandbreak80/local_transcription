@@ -2,19 +2,19 @@
   "name": "05 - API Health Monitor & GPU Status",
   "nodes": [
     {
-      "parameters": { "content": "## API Health Monitor & GPU Status\n\nPolls the transcription API health endpoint every 5 minutes.\nMonitors GPU availability, queue depth, and error rates.\nSends a Slack/email alert if the API is down or GPU becomes unavailable.\n\n**API Features Used:**\n- `GET /api/v1/health` — rate-limit exempt health check\n- Returns: GPU status, queue size, job counts, supported models/formats\n- `chunk_size_mb` and `max_request_mb` — upload limits\n\n**Health response example:**\n```json\n{\n  \"status\": \"healthy\",\n  \"gpu\": {\"available\": true, \"device\": \"RTX 4070\"},\n  \"queue_size\": 0,\n  \"processing\": 1,\n  \"completed\": 42,\n  \"failed\": 0\n}\n```\n\n**No authentication required.** Health endpoint is always exempt from rate limiting.", "color": 4, "width": 430, "height": 420 },
+      "parameters": { "content": "## API Health Monitor & GPU Status\n\nPolls the transcription API health endpoint every 5 minutes.\nMonitors GPU availability, queue depth, and error rates.\nSends a Slack/email alert if the API is down or GPU becomes unavailable.\n\n**API Features Used:**\n- `GET /api/v1/health` \u2014 rate-limit exempt health check\n- Returns: GPU status, queue size, job counts, supported models/formats\n- `chunk_size_mb` and `max_request_mb` \u2014 upload limits\n\n**Health response fields:**\n```json\n{\n  \"status\": \"healthy\",\n  \"gpu\": {\"available\": true, \"device\": \"RTX 4070\"},\n  \"queue_size\": 0,\n  \"processing\": 1,\n  \"completed\": 42,\n  \"failed\": 0,\n  \"models\": [\"tiny\", \"base\", \"small\", \"medium\", \"large-v3\"],\n  \"supported_formats\": [\"mp3\", \"wav\", \"mp4\", ...],\n  \"chunk_size_mb\": 50,\n  \"max_request_mb\": 100\n}\n```\n\n**No authentication required.** Health endpoint is always exempt from rate limiting.", "color": 4, "width": 430, "height": 500 },
       "id": "note", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 50]
     },
     {
       "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] } },
-      "id": "schedule", "name": "Every 5 Minutes", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [200, 500]
+      "id": "schedule", "name": "Every 5 Minutes", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [200, 600]
     },
     {
       "parameters": {
         "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/health",
         "options": { "timeout": 10000 }
       },
-      "id": "health", "name": "Check API Health", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 500],
+      "id": "health", "name": "Check API Health", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 600],
       "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 5000,
       "continueOnFail": true
     },
@@ -26,7 +26,7 @@
           ]
         }
       },
-      "id": "is-healthy", "name": "API Healthy?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [700, 500]
+      "id": "is-healthy", "name": "API Healthy?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [700, 600]
     },
     {
       "parameters": {
@@ -36,7 +36,7 @@
           ]
         }
       },
-      "id": "gpu-check", "name": "GPU Available?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [950, 400]
+      "id": "gpu-check", "name": "GPU Available?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [950, 500]
     },
     {
       "parameters": {
@@ -46,7 +46,7 @@
           ]
         }
       },
-      "id": "errors-check", "name": "Any Failed Jobs?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [950, 600]
+      "id": "errors-check", "name": "Any Failed Jobs?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [950, 700]
     },
     {
       "parameters": { "content": "## Alert Destinations\n\nReplace these with your preferred notification:\n- Slack webhook\n- Email (SMTP)\n- PagerDuty\n- Discord webhook\n- Telegram bot", "color": 3, "width": 250, "height": 160 },
@@ -61,7 +61,7 @@
           ]
         }, "options": {}
       },
-      "id": "alert-down", "name": "Alert: API Down", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [950, 800],
+      "id": "alert-down", "name": "Alert: API Down", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [950, 900],
       "notes": "Connect to Slack/Email/PagerDuty node"
     },
     {
@@ -73,7 +73,7 @@
           ]
         }, "options": {}
       },
-      "id": "alert-gpu", "name": "Alert: No GPU", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 500],
+      "id": "alert-gpu", "name": "Alert: No GPU", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 600],
       "notes": "Connect to Slack/Email/PagerDuty node"
     },
     {
@@ -85,22 +85,36 @@
           ]
         }, "options": {}
       },
-      "id": "alert-errors", "name": "Alert: Job Failures", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 700],
+      "id": "alert-errors", "name": "Alert: Job Failures", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 800],
       "notes": "Connect to Slack/Email/PagerDuty node"
     },
     {
-      "parameters": { "values": { "string": [{ "name": "status", "value": "OK" }, { "name": "gpu", "value": "={{ $json.gpu?.device || 'unknown' }}" }, { "name": "queue", "value": "={{ $json.queue_size }}" }, { "name": "completed", "value": "={{ $json.completed }}" }] }, "options": {} },
-      "id": "all-good", "name": "All Good (No Action)", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 200]
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "status", "value": "OK" },
+            { "name": "gpu", "value": "={{ $json.gpu?.device || 'unknown' }}" },
+            { "name": "queue", "value": "={{ $json.queue_size }}" },
+            { "name": "processing", "value": "={{ $json.processing }}" },
+            { "name": "completed", "value": "={{ $json.completed }}" },
+            { "name": "failed", "value": "={{ $json.failed }}" },
+            { "name": "models", "value": "={{ ($json.models || []).join(', ') }}" },
+            { "name": "chunk_size_mb", "value": "={{ $json.chunk_size_mb }}" },
+            { "name": "max_request_mb", "value": "={{ $json.max_request_mb }}" }
+          ]
+        }, "options": {}
+      },
+      "id": "all-good", "name": "All Good (Log Status)", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1200, 300]
     }
   ],
   "connections": {
     "Every 5 Minutes": { "main": [[{ "node": "Check API Health", "type": "main", "index": 0 }]] },
     "Check API Health": { "main": [[{ "node": "API Healthy?", "type": "main", "index": 0 }]] },
     "API Healthy?": { "main": [[{ "node": "GPU Available?", "type": "main", "index": 0 }, { "node": "Any Failed Jobs?", "type": "main", "index": 0 }], [{ "node": "Alert: API Down", "type": "main", "index": 0 }]] },
-    "GPU Available?": { "main": [[{ "node": "All Good (No Action)", "type": "main", "index": 0 }], [{ "node": "Alert: No GPU", "type": "main", "index": 0 }]] },
+    "GPU Available?": { "main": [[{ "node": "All Good (Log Status)", "type": "main", "index": 0 }], [{ "node": "Alert: No GPU", "type": "main", "index": 0 }]] },
     "Any Failed Jobs?": { "main": [[{ "node": "Alert: Job Failures", "type": "main", "index": 0 }], []] }
   },
   "settings": { "executionOrder": "v1" },
-  "meta": { "description": "Monitors the transcription API health every 5 minutes. Checks GPU availability, queue depth, and failed job count. Alerts on API down, GPU unavailable, or job failures.", "templateCredsSetupCompleted": true },
+  "meta": { "description": "Monitors the transcription API health every 5 minutes. Checks GPU availability, queue depth, failed job count, supported models, and upload limits. Alerts on API down, GPU unavailable, or job failures.", "templateCredsSetupCompleted": true },
   "tags": [{ "name": "monitoring" }, { "name": "health-check" }, { "name": "gpu" }]
 }

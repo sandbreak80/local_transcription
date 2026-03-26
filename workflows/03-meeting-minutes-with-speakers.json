@@ -2,12 +2,12 @@
   "name": "03 - Meeting Minutes with Named Speakers",
   "nodes": [
     {
-      "parameters": { "content": "## Meeting Minutes with Named Speakers\n\nTranscribes a meeting recording with named speaker detection,\nthen uses an LLM to generate structured meeting minutes.\n\n**API Features Used:**\n- `speaker_diarization=true` — ECAPA-TDNN speaker clustering\n- `speaker_names=Alice,Bob,Charlie` — map SPEAKER_00/01/02 to names\n- `model=medium` — highest quality for meetings\n- WebVTT output with `<v Alice>` voice tags\n\n**LLM generates:**\n- Attendee list (from speaker names)\n- Key discussion points\n- Action items with owner\n- Decisions made\n\n**Setup:**\n1. Set `TRANSCRIPTION_API_URL` env var\n2. Configure LLM credentials (OpenAI/Ollama/Anthropic)\n3. POST meeting recording with `speaker_names` in form body", "color": 4, "width": 420, "height": 430 },
+      "parameters": { "content": "## Meeting Minutes with Named Speakers\n\nTranscribes a meeting recording with named speaker detection,\nthen uses an LLM to generate structured meeting minutes.\n\n**API Features Used:**\n- `speaker_diarization=true` \u2014 ECAPA-TDNN speaker clustering\n- `speaker_names=Alice,Bob,Charlie` \u2014 map SPEAKER_00/01/02 to names\n- `model=medium` \u2014 highest quality for meetings\n- WebVTT output with `<v Alice>` voice tags\n\n**LLM generates:**\n- Attendee list (from speaker names)\n- Key discussion points\n- Action items with owner\n- Decisions made\n\n**Setup:**\n1. Set `TRANSCRIPTION_API_URL` env var\n2. Configure LLM credentials (OpenAI/Ollama/Anthropic)\n3. POST meeting recording with `speaker_names` in form body\n\n**Note:** The LLM node (`@n8n/n8n-nodes-langchain.openAi`) requires\nthe n8n AI nodes package (`@n8n/n8n-nodes-langchain`). Install it\nvia Settings > Community Nodes if not already available.", "color": 4, "width": 420, "height": 500 },
       "id": "note", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 30]
     },
     {
       "parameters": { "httpMethod": "POST", "path": "meeting-minutes", "responseMode": "responseNode", "options": {} },
-      "id": "webhook", "name": "Receive Meeting Recording", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 500],
+      "id": "webhook", "name": "Receive Meeting Recording", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 560],
       "notes": "POST with: file, speaker_names='Alice,Bob,Charlie', num_speakers=3"
     },
     {
@@ -18,6 +18,7 @@
         "contentType": "multipart-form-data",
         "bodyParameters": {
           "parameters": [
+            { "parameterType": "formBinaryData", "name": "files", "inputDataFieldName": "data" },
             { "name": "model", "value": "medium" },
             { "name": "language", "value": "en" },
             { "name": "speaker_diarization", "value": "true" },
@@ -25,25 +26,56 @@
             { "name": "num_speakers", "value": "={{ $json.body?.num_speakers || '' }}" }
           ]
         },
-        "sendBinaryData": true, "binaryPropertyName": "data",
+        "sendBinaryData": false,
         "options": { "timeout": 30000 }
       },
-      "id": "upload", "name": "Transcribe with Named Speakers", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 500],
+      "id": "upload", "name": "Transcribe with Named Speakers", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 560],
       "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 2000
     },
-    { "parameters": { "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.jobs?.[0]?.job_id || '' }}" }] }, "options": {} }, "id": "init", "name": "Init", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [700, 500] },
-    { "parameters": { "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.jobId }}", "options": { "timeout": 10000 } }, "id": "poll", "name": "Poll", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 500], "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 },
-    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }] } }, "id": "done", "name": "Done?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 500] },
-    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }] } }, "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 750] },
-    { "parameters": { "values": { "number": [{ "name": "pollCount", "value": "={{ ($json.pollCount || 0) + 1 }}" }], "string": [{ "name": "jobId", "value": "={{ $json.jobId || $('Init').item.json.jobId }}" }] }, "options": {} }, "id": "inc", "name": "Inc", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 750] },
-    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }] } }, "id": "limit", "name": "< 10min?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1700, 750] },
-    { "parameters": { "amount": 5, "unit": "seconds" }, "id": "wait", "name": "Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [1950, 700] },
+    {
+      "parameters": { "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.jobs?.[0]?.job_id || '' }}" }] }, "options": {} },
+      "id": "init", "name": "Init", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [700, 560]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init').item.json.jobId }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "poll", "name": "Poll", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 560],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "done", "name": "Done?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 560]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 810]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [{ "name": "pollCount", "value": "={{ ($('Inc').item?.json?.pollCount ?? $('Init').item.json.pollCount ?? 0) + 1 }}" }],
+          "string": [{ "name": "jobId", "value": "={{ $('Init').item.json.jobId }}" }]
+        },
+        "options": {}
+      },
+      "id": "inc", "name": "Inc", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 810]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }] } },
+      "id": "limit", "name": "< 10min?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1700, 810]
+    },
+    {
+      "parameters": { "amount": 5, "unit": "seconds" },
+      "id": "wait", "name": "Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [1950, 760]
+    },
     {
       "parameters": {
         "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init').item.json.jobId }}/files/{{ $('Poll').item.json.output_files?.[0]?.name || 'output.vtt' }}",
         "options": { "timeout": 30000, "response": { "response": { "responseFormat": "text" } } }
       },
-      "id": "dl-vtt", "name": "Download VTT with Speaker Names", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1450, 500],
+      "id": "dl-vtt", "name": "Download VTT with Speaker Names", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1450, 560],
       "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 1000
     },
     {
@@ -55,14 +87,17 @@
         ] },
         "options": {}
       },
-      "id": "llm", "name": "Generate Meeting Minutes (LLM)", "type": "@n8n/n8n-nodes-langchain.openAi", "typeVersion": 1.8, "position": [1700, 500],
-      "notes": "Replace with Ollama at 192.168.50.164:11434 for local LLM processing"
+      "id": "llm", "name": "Generate Meeting Minutes (LLM)", "type": "@n8n/n8n-nodes-langchain.openAi", "typeVersion": 1.8, "position": [1700, 560],
+      "notes": "Replace with Ollama at 192.168.50.164:11434 for local LLM processing. Requires @n8n/n8n-nodes-langchain package."
     },
     {
       "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'completed', meeting_minutes: $json.text, vtt_preview: $('Download VTT with Speaker Names').item.json.data?.substring(0, 1000) }) }}" },
-      "id": "respond", "name": "Return Minutes", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 500]
+      "id": "respond", "name": "Return Minutes", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 560]
     },
-    { "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Transcription failed or timed out' }) }}", "options": { "responseCode": 500 } }, "id": "err", "name": "Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 900] }
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Transcription failed or timed out' }) }}", "options": { "responseCode": 500 } },
+      "id": "err", "name": "Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 960]
+    }
   ],
   "connections": {
     "Receive Meeting Recording": { "main": [[{ "node": "Transcribe with Named Speakers", "type": "main", "index": 0 }]] },

@@ -110,6 +110,7 @@ Ready-to-import automation workflows showcasing each API feature. Import into n8
 | [`03-meeting-minutes-with-speakers.json`](workflows/03-meeting-minutes-with-speakers.json) | Named speakers (`speaker_names=Alice,Bob`), medium model, LLM meeting minutes |
 | [`04-extract-best-quotes.json`](workflows/04-extract-best-quotes.json) | `animated_quotes=true` — voice inflection analysis, excitement scores, 15s clips |
 | [`05-health-check-monitor.json`](workflows/05-health-check-monitor.json) | Health endpoint monitoring — GPU status, queue depth, failed job alerts |
+| [`06-job-management.json`](workflows/06-job-management.json) | `GET /api/v1/jobs?status=...` + `DELETE /api/v1/jobs/{id}` — auto-cleanup old jobs |
 
 All workflows include: poll timeout (10 min), retry logic, failed job detection, error responses, sticky notes, and configurable API URL via `TRANSCRIPTION_API_URL` env var.
 
