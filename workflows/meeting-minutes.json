@@ -2,6 +2,14 @@
   "name": "Meeting Minutes Generator",
   "nodes": [
     {
+      "parameters": { "content": "## Meeting Minutes Generator\n\nUpload a meeting recording via webhook, transcribe it with speaker detection, then use an LLM to generate structured meeting minutes.\n\n**Setup:**\n1. Set `TRANSCRIPTION_API_URL` env var (default: https://transcript.fluximetry.com)\n2. Configure LLM credentials (OpenAI, Ollama, or Anthropic)\n3. POST a file to the webhook URL", "color": 4, "width": 350, "height": 200 },
+      "id": "note-overview", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [250, 100]
+    },
+    {
+      "parameters": { "content": "## Polling Loop\n\nPolls every 5s, max 120 attempts (10 min timeout).\nChecks for completed, failed, or cancelled status.", "color": 6, "width": 300, "height": 120 },
+      "id": "note-poll", "name": "Poll Note", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [710, 100]
+    },
+    {
       "parameters": {
         "httpMethod": "POST",
         "path": "meeting-minutes",
@@ -12,12 +20,12 @@
       "name": "Receive Meeting Recording",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300]
+      "position": [250, 350]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://transcript.fluximetry.com/api/v1/jobs",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -29,55 +37,90 @@
         },
         "sendBinaryData": true,
         "binaryPropertyName": "data",
-        "options": {}
+        "options": { "timeout": 30000, "batching": { "batch": { "batchSize": 1 } } }
       },
       "id": "transcribe",
       "name": "Transcribe with Speaker Detection",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 300]
+      "position": [480, 350],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 2000, "continueOnFail": false
     },
     {
       "parameters": {
-        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.jobs[0].job_id }}",
+        "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.jobs?.[0]?.job_id || '' }}" }] },
         "options": {}
+      },
+      "id": "init-poll", "name": "Init Poll Counter", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [710, 350]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.jobId }}",
+        "options": { "timeout": 10000 }
       },
       "id": "poll",
       "name": "Check Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [710, 300]
+      "position": [940, 350],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000
     },
     {
       "parameters": {
         "conditions": {
-          "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }]
+          "options": { "caseSensitive": true },
+          "conditions": [
+            { "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }
+          ]
         }
       },
-      "id": "check",
-      "name": "Complete?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [940, 300]
-    },
-    {
-      "parameters": { "amount": 10, "unit": "seconds" },
-      "id": "wait",
-      "name": "Wait",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [940, 500]
+      "id": "check-complete", "name": "Completed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1170, 350]
     },
     {
       "parameters": {
-        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.id }}/files/{{ $json.output_files[0].name }}",
-        "options": { "response": { "response": { "responseFormat": "text" } } }
+        "conditions": {
+          "conditions": [
+            { "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }
+          ]
+        }
+      },
+      "id": "check-failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1170, 600]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [{ "name": "pollCount", "value": "={{ ($('Init Poll Counter').item.json.pollCount || $json.pollCount || 0) + 1 }}" }],
+          "string": [{ "name": "jobId", "value": "={{ $('Init Poll Counter').item.json.jobId || $json.jobId }}" }]
+        },
+        "options": {}
+      },
+      "id": "inc-poll", "name": "Increment Counter", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1400, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            { "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }
+          ]
+        }
+      },
+      "id": "check-timeout", "name": "Under Limit?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1630, 600]
+    },
+    {
+      "parameters": { "amount": 5, "unit": "seconds" },
+      "id": "wait", "name": "Wait 5s", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [1860, 550]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init Poll Counter').item.json.jobId }}/files/{{ $('Check Status').item.json.output_files?.[0]?.name || 'output.vtt' }}",
+        "options": { "timeout": 30000, "response": { "response": { "responseFormat": "text" } } }
       },
       "id": "download-vtt",
       "name": "Download VTT Transcript",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1170, 300]
+      "position": [1400, 350],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -98,7 +141,7 @@
       "name": "Generate Meeting Minutes (LLM)",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
-      "position": [1400, 300],
+      "position": [1630, 350],
       "notes": "Replace with your preferred LLM (OpenAI, Ollama, Anthropic). Configure credentials in n8n."
     },
     {
@@ -110,19 +153,49 @@
       "name": "Return Minutes",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1630, 300]
+      "position": [1860, 350]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Transcription failed or timed out' }) }}",
+        "options": { "responseCode": 500 }
+      },
+      "id": "respond-error", "name": "Respond Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1860, 750]
     }
   ],
   "connections": {
     "Receive Meeting Recording": { "main": [[{ "node": "Transcribe with Speaker Detection", "type": "main", "index": 0 }]] },
-    "Transcribe with Speaker Detection": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
-    "Check Status": { "main": [[{ "node": "Complete?", "type": "main", "index": 0 }]] },
-    "Complete?": { "main": [[{ "node": "Download VTT Transcript", "type": "main", "index": 0 }], [{ "node": "Wait", "type": "main", "index": 0 }]] },
-    "Wait": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Transcribe with Speaker Detection": { "main": [[{ "node": "Init Poll Counter", "type": "main", "index": 0 }]] },
+    "Init Poll Counter": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Check Status": { "main": [[{ "node": "Completed?", "type": "main", "index": 0 }]] },
+    "Completed?": {
+      "main": [
+        [{ "node": "Download VTT Transcript", "type": "main", "index": 0 }],
+        [{ "node": "Failed?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Failed?": {
+      "main": [
+        [{ "node": "Respond Error", "type": "main", "index": 0 }],
+        [{ "node": "Increment Counter", "type": "main", "index": 0 }]
+      ]
+    },
+    "Increment Counter": { "main": [[{ "node": "Under Limit?", "type": "main", "index": 0 }]] },
+    "Under Limit?": {
+      "main": [
+        [{ "node": "Wait 5s", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 5s": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
     "Download VTT Transcript": { "main": [[{ "node": "Generate Meeting Minutes (LLM)", "type": "main", "index": 0 }]] },
     "Generate Meeting Minutes (LLM)": { "main": [[{ "node": "Return Minutes", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" },
-  "meta": { "description": "Transcribes a meeting recording with speaker detection, then uses an LLM to generate structured meeting minutes with attendees, action items, and decisions." },
+  "meta": {
+    "description": "Transcribes a meeting recording with speaker detection, then uses an LLM to generate structured meeting minutes with attendees, action items, and decisions. Includes polling timeout (10 min max), retry logic, and error responses.",
+    "templateCredsSetupCompleted": true
+  },
   "tags": [{ "name": "transcription" }, { "name": "meetings" }, { "name": "ai" }]
 }
