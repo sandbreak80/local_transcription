@@ -1,0 +1,128 @@
+{
+  "name": "Meeting Minutes Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meeting-minutes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Receive Meeting Recording",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://transcript.fluximetry.com/api/v1/jobs",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "medium" },
+            { "name": "language", "value": "en" },
+            { "name": "speaker_diarization", "value": "true" }
+          ]
+        },
+        "sendBinaryData": true,
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "transcribe",
+      "name": "Transcribe with Speaker Detection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.jobs[0].job_id }}",
+        "options": {}
+      },
+      "id": "poll",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [710, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }]
+        }
+      },
+      "id": "check",
+      "name": "Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": { "amount": 10, "unit": "seconds" },
+      "id": "wait",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [940, 500]
+    },
+    {
+      "parameters": {
+        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.id }}/files/{{ $json.output_files[0].name }}",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "download-vtt",
+      "name": "Download VTT Transcript",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1170, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "content": "You are a meeting minutes assistant. Given a WebVTT transcript with speaker labels, produce structured meeting minutes with:\n1. Meeting title and date\n2. Attendees (from speaker labels)\n3. Key discussion points (bulleted)\n4. Action items (with owner if identifiable)\n5. Decisions made\n\nKeep it concise and professional."
+            },
+            {
+              "content": "=Generate meeting minutes from this transcript:\n\n{{ $json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "llm-summarize",
+      "name": "Generate Meeting Minutes (LLM)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1400, 300],
+      "notes": "Replace with your preferred LLM (OpenAI, Ollama, Anthropic). Configure credentials in n8n."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ transcript_vtt: $('Download VTT Transcript').item.json.data.substring(0, 500), meeting_minutes: $json.text, status: 'complete' }) }}"
+      },
+      "id": "respond",
+      "name": "Return Minutes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1630, 300]
+    }
+  ],
+  "connections": {
+    "Receive Meeting Recording": { "main": [[{ "node": "Transcribe with Speaker Detection", "type": "main", "index": 0 }]] },
+    "Transcribe with Speaker Detection": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Check Status": { "main": [[{ "node": "Complete?", "type": "main", "index": 0 }]] },
+    "Complete?": { "main": [[{ "node": "Download VTT Transcript", "type": "main", "index": 0 }], [{ "node": "Wait", "type": "main", "index": 0 }]] },
+    "Wait": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Download VTT Transcript": { "main": [[{ "node": "Generate Meeting Minutes (LLM)", "type": "main", "index": 0 }]] },
+    "Generate Meeting Minutes (LLM)": { "main": [[{ "node": "Return Minutes", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "description": "Transcribes a meeting recording with speaker detection, then uses an LLM to generate structured meeting minutes with attendees, action items, and decisions." },
+  "tags": [{ "name": "transcription" }, { "name": "meetings" }, { "name": "ai" }]
+}

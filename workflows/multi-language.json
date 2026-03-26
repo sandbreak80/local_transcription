@@ -1,0 +1,136 @@
+{
+  "name": "Multi-Language Transcribe and Translate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "translate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Receive Audio",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://transcript.fluximetry.com/api/v1/jobs",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "medium" },
+            { "name": "language", "value": "auto" }
+          ]
+        },
+        "sendBinaryData": true,
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "transcribe",
+      "name": "Transcribe (Auto-Detect Language)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.jobs[0].job_id }}",
+        "options": {}
+      },
+      "id": "poll",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [710, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }]
+        }
+      },
+      "id": "check",
+      "name": "Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": { "amount": 10, "unit": "seconds" },
+      "id": "wait",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [940, 500]
+    },
+    {
+      "parameters": {
+        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.id }}/files/{{ $json.output_files.find(f => f.name.endsWith('.json')).name }}",
+        "options": {}
+      },
+      "id": "download-json",
+      "name": "Download JSON Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1170, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ $json.language }}", "rightValue": "en", "operator": { "type": "string", "operation": "notEquals" } }]
+        }
+      },
+      "id": "is-foreign",
+      "name": "Non-English?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            { "content": "Translate the following transcript to English. Preserve speaker labels and timestamps if present. Return only the translation." },
+            { "content": "=Language detected: {{ $json.language }}\n\nTranscript:\n{{ $json.text }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "translate",
+      "name": "Translate to English (LLM)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1630, 200],
+      "notes": "Uses LLM for high-quality translation. Configure credentials in n8n."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ language: $('Download JSON Result').item.json.language, original: $('Download JSON Result').item.json.text.substring(0, 500), translated: $json.text || $('Download JSON Result').item.json.text, was_translated: $('Download JSON Result').item.json.language !== 'en' }) }}"
+      },
+      "id": "respond",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1860, 300]
+    }
+  ],
+  "connections": {
+    "Receive Audio": { "main": [[{ "node": "Transcribe (Auto-Detect Language)", "type": "main", "index": 0 }]] },
+    "Transcribe (Auto-Detect Language)": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Check Status": { "main": [[{ "node": "Complete?", "type": "main", "index": 0 }]] },
+    "Complete?": { "main": [[{ "node": "Download JSON Result", "type": "main", "index": 0 }], [{ "node": "Wait", "type": "main", "index": 0 }]] },
+    "Wait": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Download JSON Result": { "main": [[{ "node": "Non-English?", "type": "main", "index": 0 }]] },
+    "Non-English?": { "main": [[{ "node": "Translate to English (LLM)", "type": "main", "index": 0 }], [{ "node": "Return Result", "type": "main", "index": 0 }]] },
+    "Translate to English (LLM)": { "main": [[{ "node": "Return Result", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "description": "Auto-detects language, transcribes audio, and translates non-English content to English using an LLM." },
+  "tags": [{ "name": "transcription" }, { "name": "translation" }, { "name": "multi-language" }]
+}

@@ -1,0 +1,156 @@
+{
+  "name": "Watch Folder - Auto Transcribe",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] }
+      },
+      "id": "schedule",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "path": "/data/inbox",
+        "options": { "recursive": false }
+      },
+      "id": "list-files",
+      "name": "List Inbox Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "notes": "Change /data/inbox to your watched folder path"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.fileName }}",
+              "rightValue": "\\.(mp4|mp3|wav|m4a|flac|ogg|mkv|avi|mov|webm)$",
+              "operator": { "type": "string", "operation": "regex" }
+            }
+          ]
+        }
+      },
+      "id": "filter-media",
+      "name": "Filter Media Files",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [710, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "filePath": "={{ $json.path }}",
+        "options": {}
+      },
+      "id": "read-file",
+      "name": "Read File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://transcript.fluximetry.com/api/v1/jobs",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "small" },
+            { "name": "speaker_diarization", "value": "true" }
+          ]
+        },
+        "sendBinaryData": true,
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "upload",
+      "name": "Upload to Transcription API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1170, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.jobs[0].job_id }}",
+        "options": {}
+      },
+      "id": "poll",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "is-done",
+      "name": "Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1630, 300]
+    },
+    {
+      "parameters": { "amount": 10, "unit": "seconds" },
+      "id": "wait",
+      "name": "Wait 10s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1630, 500]
+    },
+    {
+      "parameters": {
+        "url": "=https://transcript.fluximetry.com/api/v1/jobs/{{ $json.id }}/files/{{ $json.output_files[0].name }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "download",
+      "name": "Download VTT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1860, 300]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "filePath": "=/data/transcripts/{{ $('Read File').item.json.fileName }}.vtt",
+        "options": {}
+      },
+      "id": "save",
+      "name": "Save to Transcripts Folder",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [2090, 300],
+      "notes": "Change /data/transcripts to your output folder"
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": { "main": [[{ "node": "List Inbox Files", "type": "main", "index": 0 }]] },
+    "List Inbox Files": { "main": [[{ "node": "Filter Media Files", "type": "main", "index": 0 }]] },
+    "Filter Media Files": { "main": [[{ "node": "Read File", "type": "main", "index": 0 }], []] },
+    "Read File": { "main": [[{ "node": "Upload to Transcription API", "type": "main", "index": 0 }]] },
+    "Upload to Transcription API": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Check Status": { "main": [[{ "node": "Done?", "type": "main", "index": 0 }]] },
+    "Done?": { "main": [[{ "node": "Download VTT", "type": "main", "index": 0 }], [{ "node": "Wait 10s", "type": "main", "index": 0 }]] },
+    "Wait 10s": { "main": [[{ "node": "Check Status", "type": "main", "index": 0 }]] },
+    "Download VTT": { "main": [[{ "node": "Save to Transcripts Folder", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "description": "Monitors a folder every 5 minutes for new media files, automatically transcribes them with speaker detection, and saves VTT output to a transcripts folder." },
+  "tags": [{ "name": "transcription" }, { "name": "automation" }]
+}
