@@ -1,0 +1,117 @@
+{
+  "name": "01 - Basic Transcription with Speaker Detection",
+  "nodes": [
+    {
+      "parameters": { "content": "## Basic Transcription with Speaker Detection\n\nDemonstrates the core transcription workflow:\n1. Upload an audio/video file\n2. Transcribe with Whisper (model: small, GPU-accelerated)\n3. Auto-detect speakers via ECAPA-TDNN neural embeddings\n4. Download WebVTT output with `<v SPEAKER_XX>` voice tags\n5. Download JSON with full segment data\n\n**API Features Used:**\n- `POST /api/v1/jobs` — upload & transcribe\n- `GET /api/v1/jobs/{id}` — poll status\n- `GET /api/v1/jobs/{id}/files/{name}` — download VTT & JSON\n- `speaker_diarization=true` — enable AI speaker detection\n- `speaker_names` — assign human names to detected speakers\n\n**Output:** WebVTT with speaker labels:\n```\n1\n00:00:00.000 --> 00:00:15.500\n<v Alice>Welcome everyone to today's meeting.\n```\n\n**Setup:** Set `TRANSCRIPTION_API_URL` env var or use default.", "color": 4, "width": 450, "height": 400 },
+      "id": "note-overview", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 50]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "transcribe",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook", "name": "Receive Audio/Video File", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "small" },
+            { "name": "language", "value": "auto" },
+            { "name": "speaker_diarization", "value": "true" },
+            { "name": "speaker_names", "value": "={{ $json.body?.speaker_names || '' }}" }
+          ]
+        },
+        "sendBinaryData": true,
+        "binaryPropertyName": "data",
+        "options": { "timeout": 30000 }
+      },
+      "id": "upload", "name": "Upload & Start Transcription", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [450, 500],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.jobs?.[0]?.job_id || '' }}" }] },
+        "options": {}
+      },
+      "id": "init-poll", "name": "Init Poll", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.jobId }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "poll", "name": "Poll Job Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 500],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "done", "name": "Completed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 500]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1200, 750]
+    },
+    {
+      "parameters": { "values": { "number": [{ "name": "pollCount", "value": "={{ ($json.pollCount || 0) + 1 }}" }], "string": [{ "name": "jobId", "value": "={{ $json.jobId || $('Init Poll').item.json.jobId }}" }] }, "options": {} },
+      "id": "inc", "name": "Increment", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 750]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }] } },
+      "id": "limit", "name": "Under 10min?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1700, 750]
+    },
+    {
+      "parameters": { "amount": 5, "unit": "seconds" },
+      "id": "wait", "name": "Wait 5s", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [1950, 700]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init Poll').item.json.jobId }}/files/{{ $('Poll Job Status').item.json.output_files?.[0]?.name || 'output.vtt' }}",
+        "options": { "timeout": 30000, "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "dl-vtt", "name": "Download WebVTT", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1450, 400],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $('Init Poll').item.json.jobId }}/files/{{ $('Poll Job Status').item.json.output_files?.find(f => f.name.endsWith('.json'))?.name || 'output.json' }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "dl-json", "name": "Download JSON", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1450, 600],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'completed', language: $('Download JSON').item.json.language, segments: $('Download JSON').item.json.segments?.length || 0, vtt: $('Download WebVTT').item.json.data, text: $('Download JSON').item.json.text }) }}"
+      },
+      "id": "respond-ok", "name": "Return Results", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1700, 500]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'error', message: $('Poll Job Status').item.json.message || 'Transcription failed or timed out' }) }}", "options": { "responseCode": 500 } },
+      "id": "respond-err", "name": "Return Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1950, 900]
+    }
+  ],
+  "connections": {
+    "Receive Audio/Video File": { "main": [[{ "node": "Upload & Start Transcription", "type": "main", "index": 0 }]] },
+    "Upload & Start Transcription": { "main": [[{ "node": "Init Poll", "type": "main", "index": 0 }]] },
+    "Init Poll": { "main": [[{ "node": "Poll Job Status", "type": "main", "index": 0 }]] },
+    "Poll Job Status": { "main": [[{ "node": "Completed?", "type": "main", "index": 0 }]] },
+    "Completed?": { "main": [[{ "node": "Download WebVTT", "type": "main", "index": 0 }, { "node": "Download JSON", "type": "main", "index": 0 }], [{ "node": "Failed?", "type": "main", "index": 0 }]] },
+    "Failed?": { "main": [[{ "node": "Return Error", "type": "main", "index": 0 }], [{ "node": "Increment", "type": "main", "index": 0 }]] },
+    "Increment": { "main": [[{ "node": "Under 10min?", "type": "main", "index": 0 }]] },
+    "Under 10min?": { "main": [[{ "node": "Wait 5s", "type": "main", "index": 0 }], [{ "node": "Return Error", "type": "main", "index": 0 }]] },
+    "Wait 5s": { "main": [[{ "node": "Poll Job Status", "type": "main", "index": 0 }]] },
+    "Download WebVTT": { "main": [[{ "node": "Return Results", "type": "main", "index": 0 }]] },
+    "Download JSON": { "main": [[]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "description": "Core transcription workflow: upload audio/video, transcribe with GPU-accelerated faster-whisper, detect speakers with ECAPA-TDNN, download WebVTT with speaker voice tags and JSON with segments.", "templateCredsSetupCompleted": true },
+  "tags": [{ "name": "transcription" }, { "name": "speaker-detection" }, { "name": "webvtt" }]
+}

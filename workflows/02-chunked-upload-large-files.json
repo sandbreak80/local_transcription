@@ -1,0 +1,108 @@
+{
+  "name": "02 - Chunked Upload for Large Files (Cloudflare Safe)",
+  "nodes": [
+    {
+      "parameters": { "content": "## Chunked Upload for Large Files\n\nDemonstrates the 3-step chunked upload API for files over 50MB.\nRequired when running behind Cloudflare Tunnels (100MB request limit).\n\n**API Features Used:**\n- `POST /api/v1/uploads` — initiate chunked session\n- `POST /api/v1/uploads/{id}/chunks` — upload 50MB chunks\n- `POST /api/v1/uploads/{id}/complete` — reassemble & start job\n- `GET /api/v1/jobs/{id}` — poll status\n- `GET /api/v1/jobs/{id}/files/{name}` — download results\n\n**How it works:**\n1. Client splits file into 50MB chunks\n2. POST each chunk with its index\n3. Server reassembles and starts transcription\n4. Poll for completion, download VTT\n\n**Max file size:** 2GB (40 chunks x 50MB)", "color": 4, "width": 420, "height": 380 },
+      "id": "note-overview", "name": "Overview", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [200, 50]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chunked-transcribe",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook", "name": "Receive Large File", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 500],
+      "notes": "For files > 50MB. Binary data will be split into chunks."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split file into 50MB chunks for Cloudflare-safe upload\nconst CHUNK_SIZE = 50 * 1024 * 1024;\nconst binary = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst totalChunks = Math.ceil(binary.length / CHUNK_SIZE);\nconst chunks = [];\n\nfor (let i = 0; i < totalChunks; i++) {\n  const start = i * CHUNK_SIZE;\n  const end = Math.min(start + CHUNK_SIZE, binary.length);\n  chunks.push({\n    json: {\n      chunk_index: i,\n      total_chunks: totalChunks,\n      filename: $input.item.json.body?.filename || 'upload.mp4',\n      model: $input.item.json.body?.model || 'small',\n      file_size_mb: Math.round(binary.length / 1024 / 1024 * 100) / 100\n    },\n    binary: {\n      chunk: await this.helpers.prepareBinaryData(\n        binary.slice(start, end),\n        `chunk_${i}`\n      )\n    }\n  });\n}\n\nreturn chunks;"
+      },
+      "id": "split", "name": "Split Into 50MB Chunks", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/uploads",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filename: $json.filename, total_chunks: $json.total_chunks, total_size_mb: $json.file_size_mb, model: $json.model, speaker_diarization: 'true' }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "init-upload", "name": "Initiate Chunked Upload", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [700, 500],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 2000
+    },
+    {
+      "parameters": { "content": "## Chunk Upload Loop\n\nIterates through each 50MB chunk, uploading to:\n`POST /api/v1/uploads/{upload_id}/chunks`\n\nChunk endpoint is rate-limit exempt for streaming.", "color": 6, "width": 300, "height": 130 },
+      "id": "note-chunks", "name": "Chunk Note", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [950, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/uploads/{{ $('Initiate Chunked Upload').item.json.upload_id }}/chunks",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": { "parameters": [{ "name": "chunk_index", "value": "={{ $json.chunk_index }}" }] },
+        "sendBinaryData": true,
+        "binaryPropertyName": "chunk",
+        "options": { "timeout": 60000 }
+      },
+      "id": "upload-chunk", "name": "Upload Each Chunk", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [950, 500],
+      "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/uploads/{{ $('Initiate Chunked Upload').item.json.upload_id }}/complete",
+        "options": { "timeout": 30000 }
+      },
+      "id": "complete", "name": "Finalize & Start Transcription", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1200, 500],
+      "retryOnFail": true, "maxTries": 2, "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "values": { "number": [{ "name": "pollCount", "value": 0 }], "string": [{ "name": "jobId", "value": "={{ $json.job_id || '' }}" }] },
+        "options": {}
+      },
+      "id": "init-poll", "name": "Init Poll", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1450, 500]
+    },
+    {
+      "parameters": { "url": "={{ $env.TRANSCRIPTION_API_URL || 'https://transcript.fluximetry.com' }}/api/v1/jobs/{{ $json.jobId }}", "options": { "timeout": 10000 } },
+      "id": "poll", "name": "Poll Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1700, 500], "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "done", "name": "Done?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1950, 500]
+    },
+    {
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } }] } },
+      "id": "failed", "name": "Failed?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [1950, 750]
+    },
+    { "parameters": { "values": { "number": [{ "name": "pollCount", "value": "={{ ($json.pollCount || 0) + 1 }}" }], "string": [{ "name": "jobId", "value": "={{ $json.jobId || $('Init Poll').item.json.jobId }}" }] }, "options": {} }, "id": "inc", "name": "Inc", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [2200, 750] },
+    { "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $json.pollCount }}", "rightValue": 120, "operator": { "type": "number", "operation": "lt" } }] } }, "id": "limit", "name": "< 10min?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [2450, 750] },
+    { "parameters": { "amount": 5, "unit": "seconds" }, "id": "wait", "name": "Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [2700, 700] },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'completed', job_id: $('Init Poll').item.json.jobId, file_size_mb: $('Finalize & Start Transcription').item.json.file_size_mb, files: $('Poll Status').item.json.output_files }) }}" },
+      "id": "respond-ok", "name": "Return Results", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [2200, 500]
+    },
+    { "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Failed or timed out' }) }}", "options": { "responseCode": 500 } }, "id": "respond-err", "name": "Error", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [2700, 900] }
+  ],
+  "connections": {
+    "Receive Large File": { "main": [[{ "node": "Split Into 50MB Chunks", "type": "main", "index": 0 }]] },
+    "Split Into 50MB Chunks": { "main": [[{ "node": "Initiate Chunked Upload", "type": "main", "index": 0 }]] },
+    "Initiate Chunked Upload": { "main": [[{ "node": "Upload Each Chunk", "type": "main", "index": 0 }]] },
+    "Upload Each Chunk": { "main": [[{ "node": "Finalize & Start Transcription", "type": "main", "index": 0 }]] },
+    "Finalize & Start Transcription": { "main": [[{ "node": "Init Poll", "type": "main", "index": 0 }]] },
+    "Init Poll": { "main": [[{ "node": "Poll Status", "type": "main", "index": 0 }]] },
+    "Poll Status": { "main": [[{ "node": "Done?", "type": "main", "index": 0 }]] },
+    "Done?": { "main": [[{ "node": "Return Results", "type": "main", "index": 0 }], [{ "node": "Failed?", "type": "main", "index": 0 }]] },
+    "Failed?": { "main": [[{ "node": "Error", "type": "main", "index": 0 }], [{ "node": "Inc", "type": "main", "index": 0 }]] },
+    "Inc": { "main": [[{ "node": "< 10min?", "type": "main", "index": 0 }]] },
+    "< 10min?": { "main": [[{ "node": "Wait", "type": "main", "index": 0 }], [{ "node": "Error", "type": "main", "index": 0 }]] },
+    "Wait": { "main": [[{ "node": "Poll Status", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "description": "Demonstrates the 3-step chunked upload API for large files (>50MB). Splits files into Cloudflare-safe 50MB chunks, uploads each chunk, reassembles on server, and starts transcription. Supports files up to 2GB.", "templateCredsSetupCompleted": true },
+  "tags": [{ "name": "transcription" }, { "name": "chunked-upload" }, { "name": "large-files" }]
+}

@@ -101,17 +101,17 @@ curl -X POST /api/v1/uploads/{id}/complete
 
 ## n8n Workflows
 
-Ready-to-import automation workflows in the [`workflows/`](workflows/) directory:
+Ready-to-import automation workflows showcasing each API feature. Import into n8n via **Settings > Import from File**.
 
-| Workflow | Description |
-|----------|-------------|
-| [`transcribe-and-email.json`](workflows/transcribe-and-email.json) | Upload file, transcribe, email the VTT result |
-| [`watch-folder.json`](workflows/watch-folder.json) | Monitor a folder, auto-transcribe new files |
-| [`meeting-minutes.json`](workflows/meeting-minutes.json) | Transcribe with speakers, generate meeting summary via LLM |
-| [`multi-language.json`](workflows/multi-language.json) | Detect language, transcribe, translate to English |
-| [`webhook-pipeline.json`](workflows/webhook-pipeline.json) | Receive files via webhook, transcribe, POST results back |
+| Workflow | API Features Demonstrated |
+|----------|--------------------------|
+| [`01-basic-transcription.json`](workflows/01-basic-transcription.json) | Upload, transcribe, speaker detection, download WebVTT + JSON |
+| [`02-chunked-upload-large-files.json`](workflows/02-chunked-upload-large-files.json) | 3-step chunked upload API for files >50MB (Cloudflare safe) |
+| [`03-meeting-minutes-with-speakers.json`](workflows/03-meeting-minutes-with-speakers.json) | Named speakers (`speaker_names=Alice,Bob`), medium model, LLM meeting minutes |
+| [`04-extract-best-quotes.json`](workflows/04-extract-best-quotes.json) | `animated_quotes=true` — voice inflection analysis, excitement scores, 15s clips |
+| [`05-health-check-monitor.json`](workflows/05-health-check-monitor.json) | Health endpoint monitoring — GPU status, queue depth, failed job alerts |
 
-Import any workflow into n8n: **Settings > Import from File**
+All workflows include: poll timeout (10 min), retry logic, failed job detection, error responses, sticky notes, and configurable API URL via `TRANSCRIPTION_API_URL` env var.
 
 ## Limitations & Known Issues
 
