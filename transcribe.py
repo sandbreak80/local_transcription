@@ -7,7 +7,7 @@ Uses OpenAI Whisper for high-quality local transcription of audio and video file
 import os
 import sys
 import click
-import whisper
+from faster_whisper import WhisperModel, BatchedInferencePipeline
 import ffmpeg
 from pathlib import Path
 from tqdm import tqdm
@@ -58,21 +58,62 @@ class MediaTranscriber:
                 click.echo("   Continuing with basic speaker detection.")
     
     def load_model(self):
-        """Load the Whisper model, falling back to CPU if GPU runs out of memory."""
+        """Load the faster-whisper model, falling back to CPU if GPU unavailable."""
         if self.model is None:
-            click.echo(f"Loading Whisper model '{self.model_size}'...")
+            click.echo(f"Loading faster-whisper model '{self.model_size}'...")
             try:
-                self.model = whisper.load_model(self.model_size)
-            except RuntimeError as e:
-                if "CUDA" in str(e) or "out of memory" in str(e):
-                    click.echo(f"GPU out of memory, falling back to CPU...")
-                    import torch
-                    torch.cuda.empty_cache()
-                    self.model = whisper.load_model(self.model_size, device="cpu")
-                else:
-                    raise
+                self.model = WhisperModel(
+                    self.model_size,
+                    device="cuda",
+                    compute_type="float16",
+                )
+            except Exception as e:
+                click.echo(f"GPU not available ({e}), using CPU...")
+                self.model = WhisperModel(
+                    self.model_size,
+                    device="cpu",
+                    compute_type="int8",
+                )
             click.echo("Model loaded successfully!")
-    
+
+    def _run_transcription(self, audio_path, language=None, task="transcribe"):
+        """Run faster-whisper transcription with batched inference for speed."""
+        try:
+            # Batched inference: 4-8x faster on GPU
+            pipeline = BatchedInferencePipeline(model=self.model)
+            segments_iter, info = pipeline.transcribe(
+                audio_path,
+                language=language,
+                task=task,
+                batch_size=16,
+            )
+        except (RuntimeError, Exception) as e:
+            # Fall back to sequential if batched OOMs or fails
+            click.echo(f"Batched inference unavailable ({e}), using sequential...")
+            segments_iter, info = self.model.transcribe(
+                audio_path,
+                language=language,
+                task=task,
+                beam_size=5,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+            )
+
+        segments = []
+        text_parts = []
+        for seg in segments_iter:
+            segments.append({
+                'start': float(seg.start),
+                'end': float(seg.end),
+                'text': seg.text,
+            })
+            text_parts.append(seg.text)
+        return {
+            'text': ' '.join(text_parts).strip(),
+            'language': info.language or 'unknown',
+            'segments': segments,
+        }
+
     def load_quote_detector(self, quote_duration=15.0, num_quotes=10):
         """Load the animated quote detector."""
         if self.quote_detector is None:
@@ -252,25 +293,14 @@ class MediaTranscriber:
         audio_path = self.extract_audio(file_path)
         
         try:
-            # Transcribe with Whisper
-            result = self.model.transcribe(
-                audio_path,
-                language=language,
-                task=task,
-                verbose=False
-            )
-            
-            # Clean up temporary audio file if it was created
+            result = self._run_transcription(audio_path, language, task)
+
             if audio_path != file_path:
                 os.remove(audio_path)
-            
-            return {
-                'text': result['text'].strip(),
-                'language': result.get('language', 'unknown'),
-                'segments': result.get('segments', []),
-                'file_path': file_path,
-                'timestamp': datetime.now().isoformat()
-            }
+
+            result['file_path'] = file_path
+            result['timestamp'] = datetime.now().isoformat()
+            return result
         
         except Exception as e:
             # Clean up temporary audio file on error
@@ -579,12 +609,8 @@ class MediaTranscriber:
         audio_path = self.extract_audio(file_path)
         
         try:
-            # Transcribe with Whisper
-            result = self.model.transcribe(
-                audio_path,
-                verbose=False
-            )
-            
+            result = self._run_transcription(audio_path)
+
             # Detect animated quotes
             click.echo("Detecting animated quotes...")
             quotes = self.quote_detector.detect_animated_quotes(audio_path, result)
@@ -700,12 +726,8 @@ class MediaTranscriber:
         audio_path = self.extract_audio(file_path)
         
         try:
-            # Transcribe with Whisper
-            result = self.model.transcribe(
-                audio_path,
-                verbose=False
-            )
-            
+            result = self._run_transcription(audio_path)
+
             # Detect two-list quotes
             click.echo("Detecting two-list quotes...")
             two_list_results = self.two_list_detector.detect_two_lists(audio_path, result)

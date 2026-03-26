@@ -302,23 +302,17 @@ _model_cache_lock = threading.Lock()
 
 
 def _get_model(model_name):
-    """Get a cached Whisper model, loading it if needed."""
+    """Get a cached faster-whisper model, loading if needed."""
     with _model_cache_lock:
         if model_name in _model_cache:
             return _model_cache[model_name]
 
     # Load outside the lock (slow operation)
-    from transcribe import MediaTranscriber
-    import whisper
+    from faster_whisper import WhisperModel
     try:
-        model = whisper.load_model(model_name)
-    except RuntimeError as e:
-        if "CUDA" in str(e) or "out of memory" in str(e):
-            import torch
-            torch.cuda.empty_cache()
-            model = whisper.load_model(model_name, device="cpu")
-        else:
-            raise
+        model = WhisperModel(model_name, device="cuda", compute_type="float16")
+    except Exception:
+        model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
     with _model_cache_lock:
         _model_cache[model_name] = model
