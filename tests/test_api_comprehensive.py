@@ -546,6 +546,30 @@ class TestEdgeCases(unittest.TestCase):
         self.assertFalse(d['speaker_diarization'])
         cleanup_job(job_id)
 
+    def test_speaker_diarization_produces_labels(self):
+        """Speaker diarization should add SPEAKER labels to VTT output."""
+        # Use the speech test file (TTS-generated, has actual words)
+        speech_file = '/tmp/speech_test.wav'
+        if not os.path.exists(speech_file):
+            self.skipTest("Speech test file not available")
+
+        d = upload_and_wait(speech_file, 'speaker_test.wav',
+                            data={'model': 'tiny', 'speaker_diarization': 'true'})
+        self.assertEqual(d['status'], 'completed')
+
+        # Download VTT and verify speaker labels
+        vtt_files = [f for f in d['output_files'] if f['name'].endswith('.vtt')]
+        self.assertTrue(len(vtt_files) > 0, "No VTT file produced")
+
+        pace()
+        r = requests.get(f"{API}/jobs/{d['_job_id']}/files/{vtt_files[0]['name']}")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('WEBVTT', r.text)
+        self.assertIn('SPEAKER', r.text, "VTT output missing speaker labels")
+        self.assertIn('<v SPEAKER_', r.text, "VTT missing speaker voice tags")
+
+        cleanup_job(d['_job_id'])
+
 
 # ===========================================================================
 # 4. CHUNKED UPLOAD TESTS

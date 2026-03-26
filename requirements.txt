@@ -12,6 +12,7 @@ flask
 flask-limiter
 werkzeug
 # Speaker diarization (REAL voice detection)
+huggingface_hub<0.24
 speechbrain>=1.0.0
 pyannote.audio>=3.1.0
 pyannote.core>=5.0.0

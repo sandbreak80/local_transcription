@@ -125,24 +125,50 @@ class LocalSpeakerDetector:
     
     def _extract_audio_features(self, audio: np.ndarray, sr: int) -> np.ndarray:
         """
-        Extract audio features as a fallback embedding.
-        Uses MFCCs and spectral features.
+        Extract rich audio features as speaker embedding.
+        Uses MFCCs + deltas, spectral features, and pitch — 56 dimensions.
         """
-        # Extract MFCCs
-        mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=13)
+        # MFCCs (13) + mean and std
+        mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=20)
         mfcc_mean = np.mean(mfccs, axis=1)
-        
-        # Extract spectral features
-        spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=audio, sr=sr))
-        spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=audio, sr=sr))
-        zero_crossing_rate = np.mean(librosa.feature.zero_crossing_rate(audio))
-        
-        # Combine features
+        mfcc_std = np.std(mfccs, axis=1)
+
+        # Delta MFCCs — captures speech dynamics unique to each speaker
+        delta_mfccs = librosa.feature.delta(mfccs)
+        delta_mean = np.mean(delta_mfccs, axis=1)
+
+        # Spectral features — voice timbre
+        spectral_centroid = librosa.feature.spectral_centroid(y=audio, sr=sr)
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sr)
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=audio, sr=sr)
+        zcr = librosa.feature.zero_crossing_rate(audio)
+
+        # Pitch — fundamental frequency, key speaker discriminator
+        pitches, magnitudes = librosa.piptrack(y=audio, sr=sr)
+        pitch_values = []
+        for t in range(pitches.shape[1]):
+            idx = magnitudes[:, t].argmax()
+            p = pitches[idx, t]
+            if p > 0:
+                pitch_values.append(p)
+        pitch_mean = np.mean(pitch_values) if pitch_values else 0
+        pitch_std = np.std(pitch_values) if pitch_values else 0
+
+        # Energy — speaking volume/style
+        rms = librosa.feature.rms(y=audio)
+
         features = np.concatenate([
-            mfcc_mean,
-            [spectral_centroid, spectral_rolloff, zero_crossing_rate]
-        ])
-        
+            mfcc_mean,           # 20
+            mfcc_std,            # 20
+            delta_mean[:10],     # 10 (first 10 delta coefficients)
+            [np.mean(spectral_centroid), np.std(spectral_centroid)],  # 2
+            [np.mean(spectral_rolloff), np.std(spectral_rolloff)],   # 2
+            [np.mean(spectral_bandwidth)],                            # 1
+            [np.mean(zcr), np.std(zcr)],                             # 2
+            [pitch_mean, pitch_std],                                  # 2
+            [np.mean(rms), np.std(rms)],                             # 2
+        ])  # Total: ~61 dimensions
+
         return features
     
     def cluster_speakers(self, embeddings: List[np.ndarray], num_speakers: Optional[int] = None) -> List[int]:

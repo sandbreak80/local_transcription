@@ -75,3 +75,4 @@ media/
 *.log
 
 models/
+models/speaker_recognition/
