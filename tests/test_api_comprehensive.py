@@ -368,7 +368,7 @@ class TestValidation(unittest.TestCase):
         os.remove(cls.wav)
 
     def _up(self, **data):
-        pace()
+        time.sleep(2.5)  # Upload rate limit: 30/min
         with open(self.wav, 'rb') as f:
             return requests.post(f"{API}/jobs",
                                  files={'files': ('v.wav', f)},

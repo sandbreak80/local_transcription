@@ -283,8 +283,6 @@ def _validate_upload_params(form):
 # Job processing
 # ---------------------------------------------------------------------------
 job_queue = queue.Queue()
-active_processes = {}  # job_id -> subprocess.Popen (for cancellation)
-active_processes_lock = threading.Lock()
 
 
 def _cleanup_input(input_file):
@@ -296,131 +294,158 @@ def _cleanup_input(input_file):
         pass
 
 
+# ---------------------------------------------------------------------------
+# Model cache — keeps Whisper models loaded between jobs
+# ---------------------------------------------------------------------------
+_model_cache = {}  # model_name -> whisper model
+_model_cache_lock = threading.Lock()
+
+
+def _get_model(model_name):
+    """Get a cached Whisper model, loading it if needed."""
+    with _model_cache_lock:
+        if model_name in _model_cache:
+            return _model_cache[model_name]
+
+    # Load outside the lock (slow operation)
+    from transcribe import MediaTranscriber
+    import whisper
+    try:
+        model = whisper.load_model(model_name)
+    except RuntimeError as e:
+        if "CUDA" in str(e) or "out of memory" in str(e):
+            import torch
+            torch.cuda.empty_cache()
+            model = whisper.load_model(model_name, device="cpu")
+        else:
+            raise
+
+    with _model_cache_lock:
+        _model_cache[model_name] = model
+    return model
+
+
 def process_job(job_id):
-    """Process a transcription job."""
+    """Process a transcription job using cached models (no subprocess)."""
+    from transcribe import MediaTranscriber
+
     job = db_get_job(job_id)
     if job is None or job['status'] == 'cancelled':
         return
 
+    input_file = job['input_file']
+    output_dir = os.path.join(app.config['OUTPUT_FOLDER'], job_id)
+    os.makedirs(output_dir, exist_ok=True)
+
     try:
         db_update_job(job_id, status='processing', progress=10,
-                      message='Starting transcription...')
+                      message='Loading model...')
 
-        input_file = job['input_file']
-        # Per-job output directory prevents file collisions between users
-        output_dir = os.path.join(app.config['OUTPUT_FOLDER'], job_id)
-        os.makedirs(output_dir, exist_ok=True)
+        model_name = job.get('model', 'base')
+        language = job.get('language')
+        if language == 'auto':
+            language = None
 
-        cmd = ['python3', '/app/transcribe.py', input_file,
-               '--output-dir', output_dir]
-
-        if job['model']:
-            cmd.extend(['--model', job['model']])
-        if job['language'] and job['language'] != 'auto':
-            cmd.extend(['--language', job['language']])
-        if job.get('animated_quotes'):
-            cmd.append('--animated-quotes')
-        if job.get('two_list_quotes'):
-            cmd.append('--two-lists')
-        if job.get('speaker_diarization'):
-            cmd.append('--speaker-diarization')
-            if job.get('num_speakers'):
-                cmd.extend(['--num-speakers', str(job['num_speakers'])])
-            if job.get('speaker_names'):
-                cmd.extend(['--speaker-names', job['speaker_names']])
+        # Get cached model
+        whisper_model = _get_model(model_name)
 
         db_update_job(job_id, progress=20, message='Transcribing audio...')
 
-        log_file = os.path.join(output_dir, f"{job_id}_transcribe.log")
-        with open(log_file, 'w') as log:
-            log.write(f"Command: {' '.join(cmd)}\n")
-            log.write(f"Input: {input_file} (exists: {os.path.exists(input_file)})\n")
-            log.flush()
+        # Create transcriber and inject the cached model
+        transcriber = MediaTranscriber(
+            model_size=model_name,
+            enable_speaker_diarization=bool(job.get('speaker_diarization')))
+        transcriber.model = whisper_model  # Skip model loading — use cache
 
-            proc = subprocess.Popen(
-                cmd, cwd=output_dir,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Build speaker name mapping
+        speaker_name_mapping = {}
+        if job.get('speaker_names'):
+            names = [n.strip() for n in job['speaker_names'].split(',')]
+            for i, name in enumerate(names):
+                speaker_name_mapping[f'SPEAKER_{i:02d}'] = name
 
-            with active_processes_lock:
-                active_processes[job_id] = proc
-
+        num_speakers = None
+        if job.get('num_speakers'):
             try:
-                stdout, stderr = proc.communicate(timeout=3600)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                stdout, stderr = proc.communicate()
-                db_update_job(job_id, status='failed', progress=0,
-                              message='Transcription timed out (max 1 hour)')
-                return
-            finally:
-                with active_processes_lock:
-                    active_processes.pop(job_id, None)
+                num_speakers = int(job['num_speakers'])
+            except (ValueError, TypeError):
+                pass
 
-            log.write(f"\nExit code: {proc.returncode}\n")
-            if stdout:
-                log.write(f"STDOUT:\n{stdout.decode('utf-8', errors='replace')}\n")
-            if stderr:
-                log.write(f"STDERR:\n{stderr.decode('utf-8', errors='replace')}\n")
+        # Run transcription
+        if job.get('two_list_quotes'):
+            result = transcriber.detect_two_list_quotes(input_file)
+        elif job.get('animated_quotes'):
+            result = transcriber.detect_animated_quotes(input_file)
+        else:
+            result = transcriber.transcribe_file(input_file, language=language)
 
-        # Check if cancelled while processing
-        job = db_get_job(job_id)
-        if job is None or job['status'] == 'cancelled':
+        # Apply speaker diarization
+        if job.get('speaker_diarization'):
+            if transcriber.speaker_diarizer:
+                result = transcriber.apply_speaker_diarization(
+                    result, str(input_file), num_speakers, speaker_name_mapping)
+            else:
+                result = transcriber.apply_basic_speaker_detection(
+                    result, num_speakers, speaker_name_mapping)
+
+        db_update_job(job_id, progress=80, message='Saving output...')
+
+        # Check if cancelled during processing
+        job_check = db_get_job(job_id)
+        if job_check is None or job_check['status'] == 'cancelled':
             return
 
-        if proc.returncode == 0:
-            base_name = Path(job['filename']).stem
-            uuid_base_name = Path(input_file).stem
-            original_filename = job['filename']
-            uuid_filename = Path(input_file).name
-            output_files = []
+        # Save outputs
+        transcriber.save_transcription(result, output_dir)
+        if job.get('animated_quotes') and result.get('animated_quotes'):
+            transcriber.save_animated_quotes(result, output_dir)
+        if job.get('two_list_quotes') and result.get('two_list_quotes'):
+            transcriber.save_two_list_quotes(result, output_dir)
 
-            for ext in ['.vtt', '.json',
-                        '_animated_quotes.txt', '_animated_quotes.json',
-                        '_two_list_quotes.txt', '_two_list_quotes.json']:
-                actual_file = os.path.join(output_dir, uuid_base_name + ext)
-                clean_filename = base_name + ext
-                clean_path = os.path.join(output_dir, clean_filename)
+        # Collect output files
+        base_name = Path(job['filename']).stem
+        uuid_base_name = Path(input_file).stem
+        output_files = []
 
-                if os.path.exists(actual_file):
+        for ext in ['.vtt', '.json',
+                    '_animated_quotes.txt', '_animated_quotes.json',
+                    '_two_list_quotes.txt', '_two_list_quotes.json']:
+            # Check for UUID-prefixed file and rename to clean name
+            actual_file = os.path.join(output_dir, uuid_base_name + ext)
+            clean_filename = base_name + ext
+            clean_path = os.path.join(output_dir, clean_filename)
+
+            if os.path.exists(actual_file) and actual_file != clean_path:
+                try:
                     with open(actual_file, 'r', encoding='utf-8') as f:
                         content = f.read()
-                    content = content.replace(uuid_filename, original_filename)
+                    content = content.replace(Path(input_file).name, job['filename'])
                     content = content.replace(uuid_base_name, base_name)
                     with open(clean_path, 'w', encoding='utf-8') as f:
                         f.write(content)
                     os.remove(actual_file)
-                    output_files.append({
-                        'name': clean_filename,
-                        'path': clean_path,
-                        'size': os.path.getsize(clean_path)
-                    })
-                elif os.path.exists(clean_path):
-                    output_files.append({
-                        'name': clean_filename,
-                        'path': clean_path,
-                        'size': os.path.getsize(clean_path)
-                    })
+                except Exception:
+                    clean_path = actual_file
+                    clean_filename = uuid_base_name + ext
 
-            db_update_job(job_id, status='completed', progress=100,
-                          message='Transcription completed!',
-                          output_files=json.dumps(output_files),
-                          completed_at=datetime.now().isoformat())
+            if os.path.exists(clean_path):
+                output_files.append({
+                    'name': clean_filename,
+                    'path': clean_path,
+                    'size': os.path.getsize(clean_path)
+                })
 
-            # Clean up input file on success
-            _cleanup_input(input_file)
-        else:
-            stderr_text = stderr.decode('utf-8', errors='replace') if stderr else ''
-            stdout_text = stdout.decode('utf-8', errors='replace') if stdout else ''
-            error_detail = (stderr_text or stdout_text or 'Unknown error').strip()
-            db_update_job(job_id, status='failed', progress=0,
-                          message=f'Error: {error_detail[:500]}',
-                          error_detail=error_detail[:2000])
-            _cleanup_input(input_file)
+        db_update_job(job_id, status='completed', progress=100,
+                      message='Transcription completed!',
+                      output_files=json.dumps(output_files),
+                      completed_at=datetime.now().isoformat())
+        _cleanup_input(input_file)
 
     except Exception as e:
         db_update_job(job_id, status='failed', progress=0,
-                      message=f'Error: {str(e)}',
-                      error_detail=str(e))
+                      message=f'Error: {str(e)[:500]}',
+                      error_detail=str(e)[:2000])
+        _cleanup_input(input_file)
         _cleanup_input(input_file)
 
 
@@ -576,19 +601,8 @@ def api_delete_job(job_id):
     if job is None:
         return _api_error('Job not found', 404)
 
-    if job['status'] == 'processing':
-        # Kill the subprocess
-        with active_processes_lock:
-            proc = active_processes.pop(job_id, None)
-        if proc:
-            try:
-                proc.kill()
-            except OSError:
-                pass
-        db_update_job(job_id, status='cancelled', progress=0,
-                      message='Cancelled by user')
-
-    elif job['status'] == 'queued':
+    if job['status'] in ('processing', 'queued'):
+        # Mark as cancelled — worker checks this between stages
         db_update_job(job_id, status='cancelled', progress=0,
                       message='Cancelled by user')
 
