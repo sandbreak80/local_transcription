@@ -26,6 +26,13 @@ services:
     environment:
       - FLASK_ENV=production
       - FLASK_PORT=5731
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 # Usage Examples:
 # 

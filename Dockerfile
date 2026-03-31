@@ -1,5 +1,10 @@
-# Use Python slim image as base
-FROM python:3.11-slim
+# Use CUDA-enabled base image for GPU acceleration
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+# Install Python
+RUN apt-get update && apt-get install -y python3.11 python3.11-dev python3-pip && \
+    ln -sf python3.11 /usr/bin/python3 && ln -sf python3 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -13,7 +18,10 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install PyTorch with CUDA 12.1 support first (must come before requirements.txt)
+RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install remaining Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
