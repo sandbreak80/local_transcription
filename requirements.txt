@@ -1,6 +1,6 @@
 faster-whisper>=1.0.0
-torch>=2.0.0,<2.6.0
-torchaudio>=2.0.0,<2.6.0
+torch==2.7.1
+torchaudio==2.7.1
 ffmpeg-python
 click
 tqdm
