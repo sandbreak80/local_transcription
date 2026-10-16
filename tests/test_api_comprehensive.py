@@ -20,7 +20,7 @@ import threading
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-BASE_URL = os.environ.get("TEST_BASE_URL", "http://192.168.50.114:5731")
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:5731")
 API = f"{BASE_URL}/api/v1"
 
 _last_request_time = 0

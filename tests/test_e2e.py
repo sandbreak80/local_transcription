@@ -20,7 +20,7 @@ import unittest
 import tempfile
 import requests
 
-BASE_URL = os.environ.get("TEST_BASE_URL", "http://192.168.50.114:5731")
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:5731")
 API = f"{BASE_URL}/api/v1"
 
 # Rate limit: 1 req/sec. This helper ensures we don't get 429s.
