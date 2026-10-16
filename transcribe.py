@@ -81,11 +81,16 @@ class MediaTranscriber:
         try:
             # Batched inference: 4-8x faster on GPU
             pipeline = BatchedInferencePipeline(model=self.model)
+            # Speaker detection labels whole segments, and without timestamp tokens
+            # the batched pipeline returns one segment per ~30s chunk, so speakers
+            # taking turns within a chunk can't be separated. Timestamp tokens cost
+            # some accuracy on smaller models, so only request them when needed.
             segments_iter, info = pipeline.transcribe(
                 audio_path,
                 language=language,
                 task=task,
                 batch_size=16,
+                without_timestamps=not self.enable_speaker_diarization,
             )
         except (RuntimeError, Exception) as e:
             # Fall back to sequential if batched OOMs or fails
