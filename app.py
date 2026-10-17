@@ -43,8 +43,18 @@ app.config['MAX_CONTENT_LENGTH'] = 55 * 1024 * 1024  # 55MB per request (chunk s
 
 # Rate limiting: 5 requests/second per IP, 300/minute burst
 # (relaxed for multi-user; Cloudflare provides additional DDoS protection)
+def _client_ip():
+    """Real client IP. Behind the Cloudflare tunnel every request arrives from the
+    local cloudflared, so use the address Cloudflare reports instead."""
+    return request.headers.get('CF-Connecting-IP') or get_remote_address()
+
+
+def _via_public_proxy():
+    return 'CF-Connecting-IP' in request.headers
+
+
 limiter = Limiter(
-    get_remote_address,
+    _client_ip,
     app=app,
     default_limits=["5 per second", "300 per minute"],
     storage_uri="memory://",
@@ -621,7 +631,7 @@ def _handle_upload(request):
         job_queue.put(job_id)
 
         log.info(f"UPLOAD id={job_id[:8]} file={filename} size={job_dict['file_size_mb']}MB "
-                 f"model={params['model']} ip={request.remote_addr}")
+                 f"model={params['model']} ip={_client_ip()}")
 
         uploaded_jobs.append({'job_id': job_id, 'filename': filename})
 
@@ -642,6 +652,17 @@ def _handle_upload(request):
 # Request logging
 # ===========================================================================
 
+# Job listings expose every user's filenames and job IDs (and so their transcripts).
+# Keep them for local/Tailscale use; hide them from the public internet.
+_PRIVATE_LISTING_ROUTES = {('GET', '/api/v1/jobs'), ('GET', '/status'), ('GET', '/scan-outputs')}
+
+
+@app.before_request
+def _hide_listings_from_public():
+    if _via_public_proxy() and (request.method, request.path.rstrip('/') or '/') in _PRIVATE_LISTING_ROUTES:
+        return _api_error('Not found', 404)
+
+
 @app.before_request
 def _log_request():
     g._request_start = time.time()
@@ -655,7 +676,7 @@ def _log_response(response):
         path = request.path
         if not path.startswith('/static') and path != '/api/v1/health' and path != '/health':
             log.debug(f"HTTP {request.method} {path} -> {response.status_code} "
-                      f"({duration:.0f}ms) ip={request.remote_addr}")
+                      f"({duration:.0f}ms) ip={_client_ip()}")
     return response
 
 
@@ -724,7 +745,7 @@ def api_delete_job(job_id):
         shutil.rmtree(job_output_dir, ignore_errors=True)
 
     db_delete_job(job_id)
-    log.info(f"DELETE id={job_id[:8]} file={job['filename']} prev_status={job['status']} ip={request.remote_addr}")
+    log.info(f"DELETE id={job_id[:8]} file={job['filename']} prev_status={job['status']} ip={_client_ip()}")
     return jsonify({'success': True, 'message': f'Job {job_id} deleted'})
 
 
